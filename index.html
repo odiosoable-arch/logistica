@@ -83,57 +83,55 @@
             map.invalidateSize();
         }
 
-        async function loadData(uid) {
-            let hoy = new Date();
-            hoy.setHours(0,0,0,0);
-            
-            const { data, error } = await _supabase
-                .from('entregas')
-                .select('*')
-                .eq('repartidor_id', uid)
-                .gte('creado_en', hoy.toISOString())
-                .order('orden', { ascending: true }); // Ordenamos por la columna de ruta
+       async function loadData(uid) {
+    let hoy = new Date();
+    hoy.setHours(0,0,0,0);
+    
+    const { data, error } = await _supabase
+        .from('entregas')
+        .select('*')
+        .eq('repartidor_id', uid)
+        .gte('creado_en', hoy.toISOString())
+        .order('orden', { ascending: true });
 
-            if (error) return;
-            markersGroup.clearLayers();
+    if (error) return;
+    markersGroup.clearLayers();
 
-            data.forEach((item, index) => {
-                // Definir color según estado
-                let color = "#3498db"; // Azul por defecto
-                if (item.estado === 'entregado') color = "#2ecc71";
-                if (item.estado === 'ausente') color = "#f1c40f";
-                if (item.estado === 'perdido' || item.estado === 'no_reintentar') color = "#e74c3c";
+    data.forEach((item, index) => {
+        // TRUCO: Limpiamos el texto por si vienen comillas de Make
+        let estadoLimpio = item.estado ? item.estado.replace(/["']/g, "").toLowerCase() : "pendiente";
 
-                const icon = L.divIcon({
-                    className: 'custom-div-icon',
-                    html: `<div class="number-icon" style="border-color:${color}; color:${color}">${item.orden || index + 1}</div>`,
-                    iconSize: [24, 24]
-                });
+        let color = "#3498db"; 
+        if (estadoLimpio === 'entregado') color = "#2ecc71";
+        if (estadoLimpio === 'ausente') color = "#f1c40f";
+        if (estadoLimpio === 'perdido' || estadoLimpio === 'no_reintentar') color = "#e74c3c";
 
-                L.marker([item.latitud, item.longitud], {icon: icon}).addTo(markersGroup)
-                    .bindPopup(`
-                        <b>#${item.orden || index + 1} - ${item.nombre}</b><br>
-                        Estado actual: <b>${item.estado}</b><br><hr>
-                        
-                        <a href="tel:${item.telefono}" class="btn-contacto btn-tel">📞 Llamar</a>
-                        <a href="https://wa.me/${item.telefono}" target="_blank" class="btn-contacto">💬 WhatsApp</a>
-                        
-                        <div style="margin-top:10px;">
-                            <select onchange="updateStatus(${item.id}, this.value)">
-                                <option value="">Cambiar Estado...</option>
-                                <option value="entregado">✅ Entregado</option>
-                                <option value="reintentar">🔄 Reintentar</option>
-                                <option value="ausente">🏠 Nadie en casa</option>
-                                <option value="no_reintentar">⛔ No reintentar</option>
-                                <option value="perdido">❌ Paquete Perdido</option>
-                                <option value="fuera_de_ruta">🛤️ Fuera de ruta</option>
-                            </select>
-                        </div>
-                        <br>
-                        <a href="https://www.google.com/maps/dir/?api=1&destination=${item.latitud},${item.longitud}" target="_blank">📍 Iniciar Navegación</a>
-                    `);
-            });
-        }
+        const icon = L.divIcon({
+            className: 'custom-div-icon',
+            html: `<div class="number-icon" style="border-color:${color}; color:${color}">${item.orden || index + 1}</div>`,
+            iconSize: [24, 24]
+        });
+
+        L.marker([item.latitud, item.longitud], {icon: icon}).addTo(markersGroup)
+            .bindPopup(`
+                <b>#${item.orden || index + 1} - ${item.nombre}</b><br>
+                Estado: <b>${estadoLimpio.toUpperCase()}</b><br><hr>
+                <a href="tel:${item.telefono}" class="btn-contacto btn-tel">📞 Llamar</a>
+                <a href="https://wa.me/${item.telefono}" target="_blank" class="btn-contacto">💬 WhatsApp</a>
+                <div style="margin-top:10px;">
+                    <select onchange="updateStatus(${item.id}, this.value)">
+                        <option value="">Cambiar Estado...</option>
+                        <option value="entregado">✅ Entregado</option>
+                        <option value="reintentar">🔄 Reintentar</option>
+                        <option value="ausente">🏠 Nadie en casa</option>
+                        <option value="no_reintentar">⛔ No reintentar</option>
+                    </select>
+                </div>
+                <br>
+                <a href="https://www.google.com/maps/dir/?api=1&destination=${item.latitud},${item.longitud}" target="_blank">📍 Iniciar Navegación</a>
+            `);
+    });
+}
 
         async function updateStatus(rowId, newStatus) {
             if (!newStatus) return;
