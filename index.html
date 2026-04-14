@@ -1,1 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logística Pro v4.3 - Cuautitlán</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        html, body { margin: 0; padding: 0; height: 100%; width: 100%; font-family: sans-serif; background-color: #f0f2f5; }
+        #login-screen { max-width: 350px; margin: 80px auto; padding: 25px; background: white; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; }
+        input, select { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #1a73e8; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }
+        #main-screen { display: none; height: 100vh; width: 100%; flex-direction: column; }
+        #map { flex-grow: 1; width: 100%; }
+        .header { background: #202124; color: white; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; }
+        .number-icon { background: white; border: 2px solid #1a73e8; border-radius: 50%; color: #1a73e8; font-weight: bold; text-align: center; line-height: 22px; font-size: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+        .btn-opt { background: #f39c12; margin-top: 5px; font-size: 11px; width: auto; padding: 8px 12px; }
+        .btn-contacto { display: inline-block; padding: 10px; border-radius: 5px; text-decoration: none; color: white; font-weight: bold; text-align: center; width: 42%; margin-bottom: 10px; }
+        .btn-tel { background: #3498db; }
+        .btn-wa { background: #25D366; }
+    </style>
+</head>
+<body>
 
+    <div id="login-screen">
+        <h3>🚚 Sistema de Logística</h3>
+        <input type="email" id="email" placeholder="Correo">
+        <input type="password" id="password" placeholder="Contraseña">
+        <button id="btn-entrar">INGRESAR</button>
+        <p id="error-msg" style="color:red; display:none; margin-top:10px; font-size:12px;"></p>
+    </div>
+
+    <div id="main-screen">
+        <div class="header">
+            <div>
+                <span id="user-display" style="font-size: 11px; color: #bbb;">Cargando...</span><br>
+                <button class="btn-opt" onclick="optimizarRuta()">✨ OPTIMIZAR PENDIENTES</button>
+            </div>
+            <button onclick="location.reload()" style="width:auto; background:#5f6368; padding:5px 10px; margin:0; font-size: 12px;">Salir</button>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        const URL_PROYECTO = 'https://dmmjjcgruacwbmbicbyg.supabase.co';
+        const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbWpqY2dydWFjd2JtYmljYnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDI2NTYsImV4cCI6MjA5MTcxODY1Nn0.wIMdzc8gEycItKvPGvRmSu90kSsOxviTOgnMNIF4dJs'; 
+        const _supabase = supabase.createClient(URL_PROYECTO, ANON_KEY);
+
+        let map, markersGroup, currentUid, listaEntregas = [];
+
+        // --- MANEJO DE SESIÓN ---
+        document.getElementById('btn-entrar').addEventListener('click', async () => {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
+
+            if (error) {
+                document.getElementById('error-msg').innerText = "Acceso denegado: " + error.message;
+                document.getElementById('error-msg').style.display = 'block';
+            } else {
+                currentUid = data.user.id;
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('main-screen').style.display = 'flex';
+                document.getElementById('user-display').innerText = email;
+                
+                setTimeout(() => { 
+                    initMap(); 
+                    loadData(); 
+                    setInterval(loadData, 20000); // Auto-refresco cada 20 seg
+                }, 200);
+            }
+        });
+
+        function initMap() {
+            if (!map) {
+                map = L.map('map').setView([19.67, -99.16], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                markersGroup = L.layerGroup().addTo(map);
+            }
+            map.invalidateSize();
+        }
+
+        // --- CARGA DE DATOS E INVENTARIO ---
+        async function loadData() {
+            if (!currentUid) return;
+            let ayer = new Date(); ayer.setHours(ayer.getHours() - 24);
+            
+            const { data, error } = await _supabase
+                .from('entregas')
+                .select('*')
+                .eq('repartidor_id', currentUid)
+                .gte('creado_en', ayer.toISOString())
+                .order('orden', { ascending: true });
+
+            if (error) return;
+            listaEntregas = data;
+            markersGroup.clearLayers();
+
+            data.forEach((item, index) => {
+                let st = item.estado ? item.estado.replace(/["']/g, "").toLowerCase() : "pendiente";
+                
+                // REGLA: Si ya se entregó, se quita del mapa.
+                if (st === 'entregado') return;
+
+                // LÓGICA DE COLORES E ICONOS
+                let color = "#1a73e8"; // Azul - Pendiente
+                let etiqueta = item.orden || index + 1;
+
+                if (st === 'ausente') color = "#f1c40f"; // Amarillo - Nadie en casa
+                if (st === 'reintentar') color = "#9b59b6"; // Morado - Reintentar
+                if (st === 'perdido' || st === 'no_reintentar' || st === 'cancelado' || st === 'fuera_de_ruta') {
+                    color = "#e74c3c"; // Rojo - Sobrante/Problema
+                    etiqueta = "⚠️";
+                }
+
+                const icon = L.divIcon({
+                    className: 'custom-div',
+                    html: `<div class="number-icon" style="border-color:${color}; color:${color}">${etiqueta}</div>`,
+                    iconSize: [26, 26]
+                });
+
+                L.marker([item.latitud, item.longitud], {icon: icon}).addTo(markersGroup)
+                    .bindPopup(`
+                        <div style="min-width:180px; font-size:13px;">
+                            <b>#${item.orden || index + 1} - ${item.nombre}</b><br>
+                            Estatus: <b style="color:${color}">${st.toUpperCase()}</b><hr>
+                            
+                            <div style="display:flex; justify-content:space-between;">
+                                <a href="tel:${item.telefono}" class="btn-contacto btn-tel">📞 Llamar</a>
+                                <a href="https://wa.me/${item.telefono}" target="_blank" class="btn-contacto btn-wa">💬 WA</a>
+                            </div>
+                            
+                            <select onchange="updateStatus(${item.id}, this.value)" style="margin-top:5px; font-size:12px;">
+                                <option value="">⚙️ Cambiar Estado...</option>
+                                <option value="entregado">✅ Entregado</option>
+                                <option value="reintentar">🔄 Reintentar</option>
+                                <option value="ausente">🏠 Nadie en casa</option>
+                                <option value="no_reintentar">⛔ Cancelado</option>
+                                <option value="perdido">❌ Paquete Perdido</option>
+                                <option value="fuera_de_ruta">🛤️ Fuera de ruta</option>
+                            </select>
+                            
+                            <br><br>
+                            <a href="https://www.google.com/maps/dir/?api=1&destination=${item.latitud},${item.longitud}" 
+                               target="_blank" style="display:block; text-align:center; color:#1a73e8; font-weight:bold; text-decoration:none; border:1px solid #1a73e8; padding:5px; border-radius:4px;">📍 INICIAR NAVEGACIÓN GPS</a>
+                        </div>
+                    `);
+            });
+        }
+
+        async function updateStatus(rowId, newStatus) {
+            if (!newStatus) return;
+            const { error } = await _supabase.from('entregas').update({ estado: newStatus }).eq('id', rowId);
+            if (!error) loadData();
+        }
+
+        // --- OPTIMIZACIÓN DE RUTA ---
+        function calcularDistancia(lat1, lon1, lat2, lon2) {
+            return Math.sqrt(Math.pow(lat2 - lat1, 2) + Math.pow(lon2 - lon1, 2));
+        }
+
+        async function optimizarRuta() {
+            if (listaEntregas.length === 0) return alert("No hay entregas en el mapa.");
+            
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                let latAct = pos.coords.latitude;
+                let lonAct = pos.coords.longitude;
+                
+                // Filtramos solo los que se pueden entregar (Pendientes y Reintentos)
+                let activos = listaEntregas.filter(e => {
+                    let s = e.estado ? e.estado.toLowerCase().replace(/["']/g, "") : "pendiente";
+                    return s === 'pendiente' || s === 'reintentar';
+                });
+
+                if (activos.length === 0) return alert("No hay entregas pendientes por optimizar.");
+
+                let rutaOrdenada = [];
+                while (activos.length > 0) {
+                    let masCercano = null, distMin = Infinity, indexMin = -1;
+                    activos.forEach((p, idx) => {
+                        let d = calcularDistancia(latAct, lonAct, p.latitud, p.longitud);
+                        if (d < distMin) { distMin = d; masCercano = p; indexMin = idx; }
+                    });
+                    rutaOrdenada.push(masCercano);
+                    latAct = masCercano.latitud; lonAct = masCercano.longitud;
+                    activos.splice(indexMin, 1);
+                }
+
+                // Guardar nuevo orden 1, 2, 3...
+                for (let i = 0; i < rutaOrdenada.length; i++) {
+                    await _supabase.from('entregas').update({ orden: i + 1 }).eq('id', rutaOrdenada[i].id);
+                }
+                
+                alert("✨ Ruta optimizada. Los sobrantes (en rojo) no fueron numerados.");
+                loadData();
+            }, () => alert("Error: Por favor activa el GPS de tu celular."));
+        }
+    </script>
+</body>
+</html>
