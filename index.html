@@ -10,24 +10,48 @@
     </style>
 </head>
 <body>
-    <div class="header"><h1>🚚 Panel de Control - Carlitos</h1></div>
+    <div class="header"><h1>🚚 Panel de Control - Logística</h1></div>
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        // Aquí es donde el mapa se centra en Cuautitlán
-        var map = L.map('map').setView([19.67, -99.16], 13);
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
+    <script>
+        // 1. CONFIGURACIÓN (Pega tus datos aquí)
+        const SUPABASE_URL = 'https://dmmjjcgruacwbmbicbyg.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbWpqY2dydWFjd2JtYmljYnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDI2NTYsImV4cCI6MjA5MTcxODY1Nn0.wIMdzc8gEycItKvPGvRmSu90kSsOxviTOgnMNIF4dJs'; // La que empieza con eyJ...
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // 2. INICIALIZAR MAPA
+        var map = L.map('map').setView([19.67, -99.16], 13);
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap'
         }).addTo(map);
 
-        // Esta función "dibujará" los puntos que vengan de tu base de datos
-        function agregarPunto(lat, lng, nombre) {
-            L.marker([lat, lng]).addTo(map)
-                .bindPopup(nombre)
-                .openPopup();
+        // 3. FUNCIÓN PARA TRAER CLIENTES
+        async function cargarClientes() {
+            const { data: entregas, error } = await supabase
+                .from('entregas')
+                .select('*');
+
+            if (error) {
+                console.error('Error cargando datos:', error);
+                return;
+            }
+
+            // Dibujar cada cliente en el mapa
+            entregas.forEach(cliente => {
+                L.marker([cliente.latitud, cliente.longitud])
+                    .addTo(map)
+                    .bindPopup(`<b>Cliente:</b> ${cliente.Nombre}<br><b>Tel:</b> ${cliente.telefono}`);
+            });
         }
+
+        // Ejecutar al cargar la página
+        cargarClientes();
+        
+        // Refrescar cada 30 segundos para ver nuevos clientes
+        setInterval(cargarClientes, 30000);
     </script>
 </body>
 </html>
