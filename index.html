@@ -67,7 +67,7 @@
                     L.marker([cliente.latitud, cliente.longitud])
                         .addTo(markersGroup)
                         .bindPopup(`
-                            <b>Cliente:</b> ${cliente.Nombre || 'Sin nombre'}<br>
+                            <b>Cliente:</b> ${cliente.nombre || 'Sin nombre'}<br>
                             <b>Teléfono:</b> ${cliente.telefono || 'Sin datos'}<br>
                             <hr>
                             <a href="https://www.google.com/maps/dir/?api=1&destination=${cliente.latitud},${cliente.longitud}" target="_blank">Abrir ruta en Google Maps</a>
