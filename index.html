@@ -1,1 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Logística Pro v6.1 - Mobile Fix</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #f7f9fc;
+            --primary-color: #2196F3;
+            --success-color: #4CAF50;
+            --warning-color: #FFC107;
+            --danger-color: #f44336;
+            --header-bg: #FFFFFF;
+        }
 
+        html, body { 
+            margin: 0; padding: 0; 
+            height: 100%; width: 100%; 
+            font-family: -apple-system, system-ui, sans-serif;
+            background-color: var(--bg-color);
+            overflow: hidden; /* Evita que la pantalla rebote */
+        }
+
+        #login-screen { 
+            max-width: 90%; margin: 20% auto; padding: 30px; 
+            background: white; border-radius: 20px; text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        #main-screen { display: none; height: 100%; width: 100%; flex-direction: column; }
+
+        .header { 
+            background: var(--header-bg); height: 70px;
+            padding: 0 15px; display: flex; justify-content: space-between; align-items: center; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 2000;
+        }
+
+        #map { flex: 1; width: 100%; z-index: 1; }
+
+        /* Estilo de los botones del Popup */
+        .premium-popup { min-width: 220px; padding: 5px; }
+        .contact-group { display: flex; gap: 8px; margin: 10px 0; }
+        
+        .btn-contact-action { 
+            flex: 1; text-align: center; text-decoration: none; 
+            padding: 12px 5px; border-radius: 10px; color: white; 
+            font-weight: bold; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 4px;
+        }
+        
+        .btn-tel-premium { background-color: var(--primary-color); }
+        .btn-wa-premium { background-color: var(--success-color); }
+
+        /* SELECT MEJORADO PARA MÓVIL */
+        .status-select-premium { 
+            width: 100%; padding: 12px; border-radius: 10px; 
+            border: 2px solid #eee; background: #fff; font-size: 16px; /* 16px evita zoom en iOS */
+            margin-bottom: 10px; color: #333;
+        }
+
+        .btn-nav-premium { 
+            display: flex; width: 100%; height: 45px; background: #333; color: white; 
+            border-radius: 10px; text-decoration: none; font-weight: bold;
+            align-items: center; justify-content: center; gap: 8px;
+        }
+
+        .number-icon-premium { 
+            background: white; border: 3px solid; border-radius: 50%; 
+            color: #333; font-weight: bold; text-align: center; 
+            line-height: 28px; font-size: 13px; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen">
+        <h2>🚚 Logística Pro</h2>
+        <input type="email" id="email" placeholder="Correo">
+        <input type="password" id="password" placeholder="Contraseña">
+        <button onclick="iniciar()" style="width:100%; padding:15px; background:var(--primary-color); color:white; border:none; border-radius:12px; font-weight:bold;">ENTRAR</button>
+        <p id="error-msg" style="color:red; display:none;"></p>
+    </div>
+
+    <div id="main-screen">
+        <div class="header">
+            <div style="line-height:1.2">
+                <span id="user-display" style="font-size:11px; color:#999">Cargando...</span><br>
+                <button onclick="optimizarRuta()" style="background:var(--warning-color); border:none; padding:5px 10px; border-radius:15px; font-weight:bold; font-size:11px; display:flex; align-items:center; gap:3px;">
+                    <span class="material-icons" style="font-size:14px">bolt</span> OPTIMIZAR
+                </button>
+            </div>
+            <button onclick="location.reload()" style="background:#eee; border:none; padding:8px 15px; border-radius:10px; font-weight:bold;">Salir</button>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        const URL_PROYECTO = 'https://dmmjjcgruacwbmbicbyg.supabase.co';
+        const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbWpqY2dydWFjd2JtYmljYnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDI2NTYsImV4cCI6MjA5MTcxODY1Nn0.wIMdzc8gEycItKvPGvRmSu90kSsOxviTOgnMNIF4dJs'; 
+        const _supabase = supabase.createClient(URL_PROYECTO, ANON_KEY);
+
+        let map, markersGroup, userMarker, currentUid, currentEmail, listaEntregas = [];
+
+        async function iniciar() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
+            if (error) { document.getElementById('error-msg').innerText = "Error de acceso"; document.getElementById('error-msg').style.display = 'block'; }
+            else {
+                currentUid = data.user.id; currentEmail = email;
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('main-screen').style.display = 'flex';
+                document.getElementById('user-display').innerText = email;
+                setTimeout(() => { initMap(); loadData(); seguir(); setInterval(loadData, 25000); }, 200);
+            }
+        }
+
+        function initMap() {
+            if (!map) {
+                map = L.map('map', { zoomControl: false }).setView([19.67, -99.16], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                markersGroup = L.layerGroup().addTo(map);
+                L.control.zoom({ position: 'bottomright' }).addTo(map);
+            }
+            map.invalidateSize();
+        }
+
+        function seguir() {
+            if (navigator.geolocation) {
+                navigator.geolocation.watchPosition(async (pos) => {
+                    const lat = pos.coords.latitude; const lon = pos.coords.longitude;
+                    if (!userMarker) { userMarker = L.circleMarker([lat, lon], { radius: 10, fillColor: "#2196F3", color: "white", weight: 3, fillOpacity: 0.9 }).addTo(map); }
+                    else { userMarker.setLatLng([lat, lon]); }
+                    if (currentUid) { await _supabase.from('perfiles_repartidores').upsert({ id: currentUid, email: currentEmail, latitud: lat, longitud: lon, ultima_conexion: new Date().toISOString() }); }
+                }, null, { enableHighAccuracy: true });
+            }
+        }
+
+        function fixTel(tel, wa = false) {
+            let c = tel.toString().replace(/\D/g, '');
+            if (c.startsWith("521") && c.length > 11) c = "52" + c.substring(3);
+            return wa ? `https://api.whatsapp.com/send?phone=${c}` : `tel:${c.startsWith("52") ? c.substring(2) : c}`;
+        }
+
+        async function loadData() {
+            if (!currentUid) return;
+            let ayer = new Date(); ayer.setHours(ayer.getHours() - 24);
+            const { data } = await _supabase.from('entregas').select('*').eq('repartidor_id', currentUid).gte('creado_en', ayer.toISOString()).order('orden', { ascending: true });
+            if (!data) return;
+            listaEntregas = data;
+            markersGroup.clearLayers();
+
+            data.forEach((item, index) => {
+                let st = item.estado ? item.estado.replace(/["']/g, "").toLowerCase() : "pendiente";
+                if (st === 'entregado') return;
+
+                let color = "#1a73e8"; let etiqueta = item.orden || index + 1;
+                if (st === 'ausente' || st === 'nadie en casa') color = "#FFC107";
+                if (st === 'reintentar') color = "#9b59b6";
+                if (st === 'perdido' || st === 'no_reintentar' || st === 'cancelado') { color = "#e74c3c"; etiqueta = "⚠️"; }
+
+                const icon = L.divIcon({ className: 'custom', html: `<div class="number-icon-premium" style="border-color:${color}; color:${color}">${etiqueta}</div>`, iconSize: [32, 32] });
+                
+                L.marker([item.latitud, item.longitud], {icon: icon}).addTo(markersGroup)
+                    .bindPopup(`
+                        <div class="premium-popup">
+                            <b style="font-size:15px">#${item.orden || index + 1} - ${item.nombre}</b><hr>
+                            <div class="contact-group">
+                                <a href="${fixTel(item.telefono)}" class="btn-contact-action btn-tel-premium"><span class="material-icons" style="font-size:18px">call</span> Llamar</a>
+                                <a href="${fixTel(item.telefono, true)}" target="_blank" class="btn-contact-action btn-wa-premium"><span class="material-icons" style="font-size:18px">chat</span> WA</a>
+                            </div>
+                            <select onchange="updateStatus(${item.id}, this.value)" class="status-select-premium">
+                                <option value="">⚙️ Estatus: ${st.toUpperCase()}...</option>
+                                <option value="entregado">✅ Entregado</option>
+                                <option value="reintentar">🔄 Reintentar</option>
+                                <option value="ausente">🏠 Nadie en casa</option>
+                                <option value="no_reintentar">⛔ Cancelado</option>
+                            </select>
+                            <a href="https://www.google.com/maps/dir/?api=1&destination=${item.latitud},${item.longitud}" target="_blank" class="btn-nav-premium">
+                                <span class="material-icons">navigation</span> GOOGLE MAPS
+                            </a>
+                        </div>
+                    `);
+            });
+        }
+
+        async function updateStatus(rowId, newStatus) {
+            if (!newStatus) return;
+            // CERRAMOS POPUP PARA EVITAR ERROR DE INTERFAZ EN MÓVIL
+            map.closePopup();
+            await _supabase.from('entregas').update({ estado: newStatus }).eq('id', rowId);
+            loadData();
+        }
+
+        function d(l1, o1, l2, o2) { return Math.sqrt(Math.pow(l2 - l1, 2) + Math.pow(o2 - o1, 2)); }
+
+        async function optimizarRuta() {
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                let la = pos.coords.latitude; let lo = pos.coords.longitude;
+                let ac = listaEntregas.filter(e => { let s = e.estado ? e.estado.toLowerCase() : "pendiente"; return s === 'pendiente' || s === 'reintentar'; });
+                if (ac.length === 0) return;
+                let ru = [];
+                while (ac.length > 0) {
+                    let m = null, dm = Infinity, im = -1;
+                    ac.forEach((p, i) => { let dist = d(la, lo, p.latitud, p.longitud); if (dist < dm) { dm = dist; m = p; im = i; } });
+                    ru.push(m); la = m.latitud; lo = m.longitud; ac.splice(im, 1);
+                }
+                for (let i = 0; i < ru.length; i++) { await _supabase.from('entregas').update({ orden: i + 1 }).eq('id', ru[i].id); }
+                loadData();
+            });
+        }
+    </script>
+</body>
+</html>
