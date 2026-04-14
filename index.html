@@ -1,1 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logística - Acceso Restringido</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: sans-serif; background-color: #f4f7f6; }
+        
+        /* Estilos del Login */
+        #login-screen { 
+            max-width: 400px; 
+            margin: 80px auto; 
+            padding: 30px; 
+            background: white;
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        #login-screen h2 { color: #2c3e50; margin-bottom: 25px; }
+        input { 
+            width: 100%; 
+            padding: 12px; 
+            margin-bottom: 15px; 
+            border: 1px solid #ddd; 
+            border-radius: 6px; 
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        button { 
+            width: 100%; 
+            padding: 14px; 
+            background: #2c3e50; 
+            color: white; 
+            border: none; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        button:hover { background: #34495e; }
+        #error-msg { color: #e74c3c; font-size: 14px; margin-top: 15px; display: none; }
 
+        /* Estilos del Mapa */
+        #main-screen { display: none; height: 100%; width: 100%; }
+        .header { 
+            background: #2c3e50; 
+            color: white; 
+            padding: 15px; 
+            text-align: center; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        #map { height: calc(100vh - 65px); width: 100%; }
+        .logout-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            padding: 8px 15px;
+            background: #e74c3c;
+            font-size: 12px;
+            width: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen">
+        <div style="font-size: 50px; margin-bottom: 10px;">🚚</div>
+        <h2>Sistema de Entregas</h2>
+        <input type="email" id="email" placeholder="Correo electrónico">
+        <input type="password" id="password" placeholder="Contraseña">
+        <button onclick="iniciarSesion()">Ingresar al Mapa</button>
+        <p id="error-msg"></p>
+    </div>
+
+    <div id="main-screen">
+        <div class="header">
+            <h1>Panel de Control - Logística</h1>
+            <button class="logout-btn" onclick="cerrarSesion()">Cerrar Sesión</button>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        // 1. CONFIGURACIÓN
+        const URL_PROYECTO = 'https://dmmjjcgruacwbmbicbyg.supabase.co';
+        const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbWpqY2dydWFjd2JtYmljYnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDI2NTYsImV4cCI6MjA5MTcxODY1Nn0.wIMdzc8gEycItKvPGvRmSu90kSsOxviTOgnMNIF4dJs'; // <--- PEGA TU CLAVE AQUÍ
+        const _supabase = supabase.createClient(URL_PROYECTO, ANON_KEY);
+
+        let map;
+        let markersGroup;
+
+        // 2. FUNCIÓN DE LOGIN
+        async function iniciarSesion() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('error-msg');
+
+            const { data, error } = await _supabase.auth.signInWithPassword({
+                email: email,
+                password: password,
+            });
+
+            if (error) {
+                errorDiv.innerText = "Error: " + error.message;
+                errorDiv.style.display = 'block';
+            } else {
+                console.log("Acceso concedido");
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('main-screen').style.display = 'block';
+                
+                // Inicializar mapa y cargar datos
+                inicializarMapa();
+                cargarClientes(data.user.id);
+                
+                // Auto-actualizar cada 30 segundos
+                setInterval(() => cargarClientes(data.user.id), 30000);
+            }
+        }
+
+        // 3. INICIALIZAR EL MAPA
+        function inicializarMapa() {
+            if (!map) {
+                map = L.map('map').setView([19.67, -99.16], 13);
+                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap'
+                }).addTo(map);
+                markersGroup = L.layerGroup().addTo(map);
+            }
+        }
+
+        // 4. CARGAR CLIENTES (Filtrado por usuario)
+        async function cargarClientes(userId) {
+            console.log("Cargando rutas para usuario:", userId);
+            
+            // Aquí pedimos a Supabase solo las entregas de este usuario
+            const { data: entregas, error } = await _supabase
+                .from('entregas')
+                .select('*')
+                .eq('repartidor_id', userId); // Asegúrate de tener esta columna en Supabase
+
+            if (error) {
+                console.error('Error cargando datos:', error.message);
+                return;
+            }
+
+            markersGroup.clearLayers();
+
+            entregas.forEach(cliente => {
+                if (cliente.latitud && cliente.longitud) {
+                    L.marker([cliente.latitud, cliente.longitud])
+                        .addTo(markersGroup)
+                        .bindPopup(`
+                            <b>Cliente:</b> ${cliente.Nombre || 'N/A'}<br>
+                            <b>Tel:</b> ${cliente.telefono || 'N/A'}<br>
+                            <hr>
+                            <a href="https://www.google.com/maps/dir/?api=1&destination=${cliente.latitud},${cliente.longitud}" target="_blank" style="color: blue; font-weight: bold;">Ver mejor ruta</a>
+                        `);
+                }
+            });
+        }
+
+        async function cerrarSesion() {
+            await _supabase.auth.signOut();
+            location.reload(); // Recarga la página para volver al login
+        }
+    </script>
+</body>
+</html>
