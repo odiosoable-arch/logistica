@@ -8,7 +8,6 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
         :root {
@@ -27,7 +26,7 @@
             background-color: var(--bg); overflow: hidden;
         }
 
-        /* --- NUEVO: ESTILO DEL BANNER DE ALERTA --- */
+        /* --- ESTILO DEL BANNER DE ALERTA --- */
         #alerta-nueva {
             position: fixed;
             top: 85px; 
@@ -59,12 +58,12 @@
         }
 
         #login-screen input {
-            width: 85%; padding: 15px; margin: 10px 0; border: 1px solid #ddd;
+            width: 80%; padding: 15px; margin: 10px 0; border: 1px solid #ddd;
             border-radius: 12px; font-size: 16px; outline: none;
         }
 
         #login-screen button {
-            width: 95%; padding: 15px; background: var(--primary); color: white;
+            width: 90%; padding: 15px; background: var(--primary); color: white;
             border: none; border-radius: 12px; font-weight: bold; font-size: 16px;
             margin-top: 20px; cursor: pointer;
         }
@@ -144,9 +143,10 @@
         Optimizar Ruta
     </button>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // CONFIGURACIÓN SUPABASE - COLOCA AQUÍ TUS DATOS
+        // CONFIGURACIÓN SUPABASE - PEGA TUS DATOS AQUÍ
         const SUPABASE_URL = "https://dmmjjcgruacwbmbicbyg.supabase.co";
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbWpqY2dydWFjd2JtYmljYnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDI2NTYsImV4cCI6MjA5MTcxODY1Nn0.wIMdzc8gEycItKvPGvRmSu90kSsOxviTOgnMNIF4dJs";
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -159,33 +159,34 @@
         async function login() {
             const u = document.getElementById('user').value;
             const p = document.getElementById('pass').value;
-            // Mantengo tus mismas credenciales
+            
+            // RESTAURADO: Tus credenciales exactas
             if(u === "chofer1" && p === "entrega2024") {
                 document.getElementById('login-screen').style.display = 'none';
                 document.getElementById('map').style.display = 'block';
                 document.getElementById('header').style.display = 'flex';
                 document.getElementById('btn-optimizar').style.display = 'flex';
                 initMap();
-            } else { alert("Usuario o contraseña incorrectos"); }
+            } else { 
+                alert("Error de acceso"); // Mensaje original
+            }
         }
 
         function initMap() {
             map = L.map('map', { zoomControl: false }).setView([19.4326, -99.1332], 13);
             L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
             loadData();
-            // Revisar nuevos datos automáticamente cada 30 segundos
+            // Revisión automática cada 30 seg
             setInterval(loadData, 30000);
         }
 
         async function loadData() {
             const icon = document.getElementById('sync-icon');
             icon.classList.add('spinning');
-
             try {
                 if (navigator.onLine) {
                     const { data, error } = await _supabase.from('entregas').select('*').order('orden', { ascending: true });
                     if (error) throw error;
-                    
                     await db.entregas.clear();
                     await db.entregas.bulkAdd(data);
                     document.getElementById('offline-tag').style.display = 'none';
@@ -196,7 +197,6 @@
                     procesarEntregas(localData);
                 }
             } catch (e) {
-                console.error("Error:", e);
                 const localData = await db.entregas.toArray();
                 procesarEntregas(localData);
             } finally {
@@ -209,13 +209,11 @@
             markers.forEach(m => map.removeLayer(m));
             markers = [];
 
-            // --- NUEVO: LÓGICA DE ALERTA ---
+            // ALERTA DE NUEVOS
             const hayPendientes = data.some(item => {
-                // Limpiamos posibles comillas de Make
                 let st = item.estado ? item.estado.replace(/["']/g, "").toLowerCase() : "pendiente";
                 return st === 'pendiente';
             });
-
             if (hayPendientes) {
                 document.getElementById('alerta-nueva').style.display = 'flex';
             } else {
@@ -231,32 +229,26 @@
                 marker.bindPopup(`
                     <div style="font-family: sans-serif; padding: 5px;">
                         <b style="font-size: 16px;">${loc.nombre}</b><br>
-                        <span style="color: #666;">Estado: ${loc.estado}</span><hr>
-                        <button onclick="window.open('https://www.google.com/maps?q=${loc.latitud},${loc.longitud}')" 
+                        <hr>
+                        <button onclick="window.open('https://www.google.com/search?q=https://www.google.com/maps%3Fq%3D%7B%7Blatitud%7D%7D,%7B%7Blongitud%7D%7D{loc.latitud},${loc.longitud}')" 
                                 style="width:100%; padding:10px; background:var(--primary); color:white; border:none; border-radius:8px; font-weight:bold;">
-                                VER EN MAPS
+                                INICIAR RUTA
                         </button>
                     </div>
                 `);
                 markers.push(marker);
             });
 
-            if (data.length > 0 && !map.getBounds().isValid()) {
+            if (data.length > 0) {
                 const group = new L.featureGroup(markers);
                 map.fitBounds(group.getBounds().pad(0.2));
             }
         }
 
-        // NUEVO: FUNCIÓN PARA ENFOCAR LA ALERTA
         function enfocarNueva() {
             document.getElementById('alerta-nueva').style.display = 'none';
-            const pendiente = listaEntregas.find(item => {
-                let st = item.estado ? item.estado.replace(/["']/g, "").toLowerCase() : "pendiente";
-                return st === 'pendiente';
-            });
-            if (pendiente) {
-                map.flyTo([pendiente.latitud, pendiente.longitud], 17);
-            }
+            const pendiente = listaEntregas.find(item => item.estado === 'pendiente');
+            if (pendiente) map.flyTo([pendiente.latitud, pendiente.longitud], 17);
         }
 
         async function optimizarRuta() {
@@ -264,9 +256,6 @@
                 let la = pos.coords.latitude;
                 let lo = pos.coords.longitude;
                 let activos = [...listaEntregas];
-
-                if (activos.length === 0) return alert("No hay entregas para optimizar.");
-
                 let rutaOrdenada = [];
                 while (activos.length > 0) {
                     let masCercano = null, distMin = Infinity, indexMin = -1;
@@ -278,17 +267,14 @@
                     la = masCercano.latitud; lo = masCercano.longitud;
                     activos.splice(indexMin, 1);
                 }
-
                 if (navigator.onLine) {
                     for (let i = 0; i < rutaOrdenada.length; i++) {
                         await _supabase.from('entregas').update({ orden: i + 1 }).eq('id', rutaOrdenada[i].id);
                     }
-                    alert("✨ Ruta optimizada con éxito.");
+                    alert("✨ Ruta optimizada.");
                     loadData();
-                } else {
-                    alert("Necesitas internet para optimizar la ruta.");
-                }
-            }, () => alert("Por favor activa tu GPS."));
+                } else { alert("Sin conexión."); }
+            }, () => alert("Activa GPS."));
         }
     </script>
 </body>
