@@ -1,1 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Logística Pro v9.0 - MODO OFFLINE</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+    
+    <style>
+        :root { --primary: #007AFF; --success: #34C759; --warning: #FF9500; --danger: #FF3B30; --bg: #F2F2F7; }
+        html, body { margin: 0; padding: 0; height: 100%; width: 100%; font-family: -apple-system, sans-serif; background: var(--bg); overflow: hidden; }
+        #main-screen { display: none; height: 100%; flex-direction: column; }
+        .header { background: white; height: 75px; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 1000; }
+        #map { flex: 1; width: 100%; z-index: 1; }
+        
+        /* Indicador de Sincronización */
+        #sync-indicator { 
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; 
+            border-radius: 20px; font-size: 12px; z-index: 3000; display: none;
+            align-items: center; gap: 8px;
+        }
 
+        .premium-card { min-width: 250px; }
+        .btn-action { text-decoration: none; padding: 14px; border-radius: 12px; color: white; font-weight: bold; text-align: center; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 5px; }
+        .btn-evidencia { background: var(--warning); color: white; border: none; padding: 15px; border-radius: 12px; font-weight: bold; width: 100%; margin: 10px 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-evidencia.listo { background: var(--success); }
+        .select-status { width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #ddd; font-size: 15px; background: white; }
+        .pin { background: white; border: 3px solid; border-radius: 50%; font-weight: 800; text-align: center; line-height: 28px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+    </style>
+</head>
+<body>
+
+    <div id="sync-indicator">
+        <span class="material-icons" style="font-size:16px; animation: spin 2s linear infinite;">sync</span>
+        <span id="sync-text">Sincronizando datos...</span>
+    </div>
+
+    <div id="login-screen" style="max-width:340px; margin: 25% auto; padding:40px 25px; background:white; border-radius:25px; text-align:center;">
+        <h2>🚚 Logística Pro v9</h2>
+        <input type="email" id="email" placeholder="Correo" style="width:100%; padding:16px; margin-bottom:12px; border-radius:14px; border:1px solid #ddd;">
+        <input type="password" id="password" placeholder="Contraseña" style="width:100%; padding:16px; margin-bottom:20px; border-radius:14px; border:1px solid #ddd;">
+        <button onclick="login()" style="width:100%; padding:16px; background:var(--primary); color:white; border:none; border-radius:14px; font-weight:bold;">INGRESAR</button>
+    </div>
+
+    <div id="main-screen">
+        <div class="header">
+            <div><b id="user-name">...</b><br><small id="user-display" style="font-size:10px; color:#888;"></small></div>
+            <button onclick="location.reload()" style="background:#eee; border:none; padding:10px; border-radius:10px;">Salir</button>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        const URL_PROYECTO = 'https://dmmjjcgruacwbmbicbyg.supabase.co';
+        const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbWpqY2dydWFjd2JtYmljYnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDI2NTYsImV4cCI6MjA5MTcxODY1Nn0.wIMdzc8gEycItKvPGvRmSu90kSsOxviTOgnMNIF4dJs'; 
+        const _supabase = supabase.createClient(URL_PROYECTO, ANON_KEY);
+
+        // 1. CONFIGURAR BASE DE DATOS LOCAL (DEXIE)
+        const db = new Dexie("LogisticaDB");
+        db.version(1).stores({
+            pendientes: '++id, entrega_id, tipo, dato, foto_blob'
+        });
+
+        let map, markersGroup, currentUid, currentEmail;
+
+        // Limpiador de teléfonos igual al anterior
+        function cleanPhone(tel, isWA = false) {
+            if(!tel) return "";
+            let clean = tel.toString().replace(/\D/g, '');
+            if (clean.startsWith("521") && clean.length > 10) {
+                let sinPrefijo = clean.substring(3);
+                return isWA ? "52" + sinPrefijo : sinPrefijo;
+            }
+            if (clean.length === 10) return isWA ? "52" + clean : clean;
+            return clean;
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
+            if (error) alert("Error");
+            else {
+                currentUid = data.user.id; currentEmail = email;
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('main-screen').style.display = 'flex';
+                document.getElementById('user-display').innerText = email;
+                document.getElementById('user-name').innerText = email.split('@')[0].toUpperCase();
+                initMap(); loadData(); 
+                setInterval(intentarSincronizar, 10000); // Intenta subir datos cada 10 seg
+            }
+        }
+
+        function initMap() {
+            map = L.map('map', { zoomControl: false }).setView([19.67, -99.16], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            markersGroup = L.layerGroup().addTo(map);
+        }
+
+        async function loadData() {
+            const { data } = await _supabase.from('entregas').select('*').eq('repartidor_id', currentUid);
+            if (!data) return;
+            markersGroup.clearLayers();
+            data.forEach((item, index) => {
+                if (item.estado === 'entregado') return;
+                let telLlamada = cleanPhone(item.telefono, false);
+                let telWA = cleanPhone(item.telefono, true);
+
+                const icon = L.divIcon({ className: 'custom', html: `<div class="pin" style="border-color:#007AFF; color:#007AFF">${index + 1}</div>`, iconSize: [32, 32] });
+                
+                L.marker([item.latitud, item.longitud], {icon: icon}).addTo(markersGroup).bindPopup(`
+                    <div class="premium-card">
+                        <h3>${item.nombre}</h3>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
+                            <a href="tel:${telLlamada}" class="btn-action" style="background:var(--primary)">Llamar</a>
+                            <a href="https://wa.me/${telWA}" target="_blank" class="btn-action" style="background:var(--success)">WA</a>
+                        </div>
+                        <button onclick="capturarFotoLocal(${item.id})" id="btn-foto-${item.id}" class="btn-evidencia ${item.foto_url ? 'listo' : ''}">
+                            <span class="material-icons">photo_camera</span> 
+                            ${item.foto_url ? 'LISTO' : 'TOMAR FOTO'}
+                        </button>
+                        <select onchange="cambiarEstadoLocal(${item.id}, this.value)" class="select-status">
+                            <option value="">Estado...</option>
+                            <option value="entregado">✅ ENTREGADO</option>
+                            <option value="ausente">🏠 AUSENTE</option>
+                        </select>
+                    </div>
+                `);
+            });
+        }
+
+        // GUARDAR FOTO EN MEMORIA LOCAL SI NO HAY INTERNET
+        async function capturarFotoLocal(entregaId) {
+            const input = document.createElement('input');
+            input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                // Guardamos en la base de datos del teléfono
+                await db.pendientes.add({
+                    entrega_id: entregaId,
+                    tipo: 'FOTO',
+                    foto_blob: file
+                });
+
+                document.getElementById(`btn-foto-${entregaId}`).classList.add('listo');
+                document.getElementById(`btn-foto-${entregaId}`).innerText = "GUARDADO LOCAL";
+                intentarSincronizar(); 
+            };
+            input.click();
+        }
+
+        async function cambiarEstadoLocal(id, valor) {
+            if(!valor) return;
+            await db.pendientes.add({
+                entrega_id: id,
+                tipo: 'ESTADO',
+                dato: valor
+            });
+            map.closePopup();
+            // Simulación visual inmediata
+            if(valor === 'entregado') alert("Guardado. Se subirá al recuperar señal.");
+            intentarSincronizar();
+        }
+
+        // EL "CENTINELA" QUE SUBE TODO CUANDO HAY SEÑAL
+        async function intentarSincronizar() {
+            const tareas = await db.pendientes.toArray();
+            if (tareas.length === 0) {
+                document.getElementById('sync-indicator').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('sync-indicator').style.display = 'flex';
+            
+            for (let t of tareas) {
+                try {
+                    if (t.tipo === 'FOTO') {
+                        const fileName = `offline_${t.entrega_id}_${Date.now()}.jpg`;
+                        const { data, error } = await _supabase.storage.from('evidencias').upload(fileName, t.foto_blob);
+                        if (!error) {
+                            const { data: urlData } = _supabase.storage.from('evidencias').getPublicUrl(fileName);
+                            await _supabase.from('entregas').update({ foto_url: urlData.publicUrl }).eq('id', t.entrega_id);
+                            await db.pendientes.delete(t.id);
+                        }
+                    } else if (t.tipo === 'ESTADO') {
+                        const { error } = await _supabase.from('entregas').update({ estado: t.dato }).eq('id', t.entrega_id);
+                        if (!error) await db.pendientes.delete(t.id);
+                    }
+                } catch (e) { console.log("Aún sin conexión..."); }
+            }
+            loadData();
+        }
+    </script>
+    <style> @keyframes spin { 100% { transform: rotate(360deg); } } </style>
+</body>
+</html>
