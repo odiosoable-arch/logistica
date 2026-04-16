@@ -7,8 +7,8 @@
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
-
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script> 
+    
     <style>
         :root {
             --primary: #007AFF;
@@ -26,9 +26,49 @@
             background-color: var(--bg); overflow: hidden;
         }
 
+        /* --- LOGIN REDISEÑADO (Recuperado) --- */
+        #login-screen { 
+            max-width: 360px; margin: 20% auto; padding: 40px 30px; 
+            background: white; border-radius: 25px; text-align: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.1); 
+        }
+        #login-screen input { 
+            width: 100%; padding: 16px; margin-bottom: 12px; 
+            border: 1px solid #E5E5EA; border-radius: 14px; font-size: 16px; box-sizing: border-box;
+        }
+        #login-screen button { 
+            width: 100%; padding: 16px; background: var(--primary); color: white; 
+            border: none; border-radius: 14px; font-weight: 700; font-size: 16px; cursor: pointer;
+        }
+
+        /* --- INTERFAZ PRINCIPAL (Recuperada) --- */
+        #main-screen { display: none; height: 100%; width: 100%; flex-direction: column; }
+
+        .header { 
+            background: white; height: 80px; padding: 0 20px;
+            display: flex; justify-content: space-between; align-items: center; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05); z-index: 2000;
+        }
+
+        .header-title { line-height: 1.2; }
+        .header-title b { font-size: 14px; color: var(--dark); }
+        .header-title span { font-size: 11px; color: var(--gray); }
+
+        /* Botón Optimizar (Recuperado) */
+        .btn-opt { 
+            background: var(--warning); color: white; border: none; padding: 8px 14px; 
+            border-radius: 20px; font-weight: 700; font-size: 11px;
+            display: flex; align-items: center; gap: 4px; margin-top: 4px; cursor: pointer;
+        }
+
+        .btn-salir { background: #E5E5EA; border: none; padding: 10px 18px; border-radius: 12px; font-weight: 600; color: #333; cursor: pointer; }
+
+        #map { flex: 1; width: 100%; z-index: 1; }
+
+        /* --- NUEVO: ESTILO DEL BANNER ALERTA --- */
         #alerta-nueva {
             position: fixed;
-            top: 85px; left: 15px; right: 15px;
+            top: 95px; left: 15px; right: 15px;
             background: var(--warning);
             color: white; padding: 15px; border-radius: 18px;
             display: none; align-items: center; justify-content: space-between;
@@ -41,191 +81,224 @@
             to { transform: translateY(0); opacity: 1; }
         }
 
-        #login-screen { 
-            max-width: 360px; margin: 20% auto; padding: 40px 20px; 
-            text-align: center; background: white; border-radius: 30px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            position: relative; z-index: 9999;
+        /* --- POPUP PREMIUM OFFLINE --- */
+        .leaflet-popup-content-wrapper { border-radius: 20px; padding: 5px; }
+        
+        .card-popup { min-width: 250px; padding: 5px; }
+        .card-header { margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        .card-header h3 { margin: 0; font-size: 16px; color: var(--dark); }
+
+        .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+        
+        .btn-action { 
+            text-decoration: none; padding: 14px; border-radius: 15px; 
+            color: white; font-weight: 700; font-size: 13px; 
+            display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center;
+        }
+        .btn-call { background: var(--primary); }
+        .btn-whatsapp { background: var(--success); }
+
+        /* Botón de Cámara Offline */
+        .btn-evidencia { 
+            background: var(--warning); color: white; border: none; padding: 15px; 
+            border-radius: 15px; font-weight: 700; width: 100%; margin-bottom: 12px;
+            display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px;
+            cursor: pointer;
+        }
+        .btn-evidencia.listo { background: var(--success); }
+
+        /* Selector de Estatus (Todos recuperados) */
+        .select-status { 
+            width: 100%; padding: 15px; border-radius: 15px; border: 2px solid #ddd;
+            font-size: 15px; font-weight: 600; color: var(--dark); margin-bottom: 10px;
+            background: white; outline: none; appearance: none; -webkit-appearance: none;
         }
 
-        #login-screen input {
-            width: 80%; padding: 15px; margin: 10px 0; border: 1px solid #ddd;
-            border-radius: 12px; font-size: 16px; outline: none;
+        .btn-nav { 
+            display: flex; width: 100%; background: var(--dark); color: white; 
+            padding: 15px; border-radius: 15px; text-decoration: none; font-weight: 700;
+            align-items: center; justify-content: center; gap: 8px; font-size: 14px;
         }
 
-        #login-screen button {
-            width: 90%; padding: 15px; background: var(--primary); color: white;
-            border: none; border-radius: 12px; font-weight: bold; font-size: 16px;
-            margin-top: 20px; cursor: pointer;
+        /* Marcadores */
+        .pin-premium { 
+            background: white; border: 3px solid; border-radius: 50%; 
+            color: #333; font-weight: 800; text-align: center; 
+            line-height: 28px; font-size: 13px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
         }
 
-        #map { height: 100%; width: 100%; display: none; z-index: 1; }
-
-        .header {
-            position: fixed; top: 0; width: 100%; height: 70px;
-            background: rgba(255,255,255,0.9); backdrop-filter: blur(15px);
-            z-index: 2000; display: none; align-items: center; justify-content: space-between;
-            padding: 0 20px; box-sizing: border-box; border-bottom: 1px solid #ddd;
+        /* Indicador de Sincronización (Offline) */
+        #sync-indicator { 
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; 
+            border-radius: 20px; font-size: 12px; z-index: 3000; display: none;
+            align-items: center; gap: 8px;
         }
-
-        .header h1 { font-size: 20px; font-weight: 800; color: var(--dark); margin: 0; }
-
-        .btn-sync {
-            width: 45px; height: 45px; border-radius: 50%; background: var(--bg);
-            display: flex; align-items: center; justify-content: center; border: none;
-            color: var(--primary); cursor: pointer;
-        }
-
-        .offline-tag {
-            position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
-            background: var(--danger); color: white; padding: 5px 15px;
-            border-radius: 20px; font-size: 12px; font-weight: bold; z-index: 3000;
-            display: none;
-        }
-
-        #btn-optimizar {
-            position: fixed; bottom: 30px; right: 20px; z-index: 3000;
-            background: var(--dark); color: white; border: none;
-            padding: 15px 25px; border-radius: 30px; font-weight: bold;
-            display: none; align-items: center; gap: 10px; box-shadow: 0 10px 20px rgba(0,0,0,0.3);
-        }
-
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        .spinning { animation: spin 1s linear infinite; }
     </style>
 </head>
 <body>
+
+    <div id="sync-indicator">
+        <span class="material-icons" style="font-size:16px; animation: spin 2s linear infinite;">sync</span>
+        <span id="sync-text">Sincronizando datos...</span>
+    </div>
 
     <div id="alerta-nueva">
         <div style="display: flex; align-items: center; gap: 12px;">
             <span class="material-icons">priority_high</span>
             <b>¡NUEVA UBICACIÓN RECIBIDA!</b>
         </div>
-        <button onclick="enfocarNueva()" style="background:white; border:none; padding:8px 15px; border-radius:12px; font-weight:bold; cursor:pointer;">VER</button>
+        <button onclick="enfocarNueva()" style="background:white; border:none; padding:8px 15px; border-radius:12px; font-weight:bold; cursor:pointer; color: var(--dark);">VER MAPA</button>
     </div>
 
     <div id="login-screen">
-        <span class="material-icons" style="font-size: 60px; color: var(--primary);">local_shipping</span>
-        <h2 style="margin: 10px 0;">Logística Pro</h2>
-        <input type="text" id="user" placeholder="Correo / Usuario">
-        <input type="password" id="pass" placeholder="Contraseña">
-        <button onclick="login()">Entrar al Sistema</button>
+        <span class="material-icons" style="font-size: 48px; color: var(--primary)">local_shipping</span>
+        <h2 style="margin: 10px 0 25px 0">Logística Pro</h2>
+        <input type="email" id="email" placeholder="Correo electrónico">
+        <input type="password" id="password" placeholder="Contraseña">
+        <button onclick="login()">INGRESAR AL MAPA</button>
+        <p id="error-msg" style="color:var(--danger); display:none; font-size:12px; margin-top:15px;"></p>
     </div>
 
-    <div class="header" id="header">
-        <h1>Mis Entregas</h1>
-        <button class="btn-sync" onclick="loadData()" id="sync-icon"><span class="material-icons">sync</span></button>
+    <div id="main-screen">
+        <div class="header">
+            <div class="header-title">
+                <b id="user-name">Repartidor</b><br>
+                <span id="user-display">...</span>
+                <button onclick="optimizarRuta()" class="btn-opt">
+                    <span class="material-icons" style="font-size:14px">bolt</span> OPTIMIZAR RUTA
+                </button>
+            </div>
+            <button onclick="location.reload()" class="btn-salir">Salir</button>
+        </div>
+        <div id="map"></div>
     </div>
 
-    <div id="map"></div>
-    <div class="offline-tag" id="offline-tag">MODO OFFLINE</div>
-    <button id="btn-optimizar" onclick="optimizarRuta()"><span class="material-icons">auto_fix_high</span> Optimizar</button>
-
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <script>
-        const SUPABASE_URL = "https://dmmjjcgruacwbmbicbyg.supabase.co";
-        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbWpqY2dydWFjd2JtYmljYnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDI2NTYsImV4cCI6MjA5MTcxODY1Nn0.wIMdzc8gEycItKvPGvRmSu90kSsOxviTOgnMNIF4dJs";
-        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const URL_PROYECTO = 'https://dmmjjcgruacwbmbicbyg.supabase.co';
+        const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbWpqY2dydWFjd2JtYmljYnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDI2NTYsImV4cCI6MjA5MTcxODY1Nn0.wIMdzc8gEycItKvPGvRmSu90kSsOxviTOgnMNIF4dJs'; 
+        const _supabase = supabase.createClient(URL_PROYECTO, ANON_KEY);
 
-        const db = new Dexie("PaqueteriaDB");
-        db.version(1).stores({ entregas: "id, nombre, latitud, longitud, estado, orden" });
+        // 1. CONFIGURAR BASE DE DATOS LOCAL (DEXIE)
+        const db = new Dexie("LogisticaDB_v2");
+        db.version(1).stores({
+            pendientes: '++id, entrega_id, tipo, dato, foto_blob'
+        });
 
-        let map, markers = [], listaEntregas = [];
+        // NUEVO: Variable para recordar cuántos pendientes había antes
+        let map, markersGroup, userMarker, currentUid, currentEmail, listaEntregas = [];
+        let cantidadPendientesAnterior = 0;
 
-        // --- SISTEMA DE AUTENTICACIÓN OFICIAL DE SUPABASE ---
+        // Limpiador de teléfonos (Mantiene fix anterior)
+        function cleanPhone(tel, isWA = false) {
+            if(!tel) return "";
+            let clean = tel.toString().replace(/\D/g, ''); 
+            if (clean.startsWith("521") && clean.length > 11) {
+                let sinPrefijo = clean.substring(3); 
+                return isWA ? "52" + sinPrefijo : sinPrefijo; 
+            }
+            if (clean.length === 10) return isWA ? "52" + clean : clean;
+            return clean;
+        }
+
+        // --- MANEJO DE SESIÓN ---
         async function login() {
-            const u = document.getElementById('user').value;
-            const p = document.getElementById('pass').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
 
-            try {
-                // Esto conecta directo con la pestaña de Auth de Supabase
-                const { data, error } = await _supabase.auth.signInWithPassword({
-                    email: u,
-                    password: p
-                });
-
-                if (error) {
-                    alert("Error: " + error.message);
-                } else if (data.session) {
-                    document.getElementById('login-screen').style.display = 'none';
-                    document.getElementById('map').style.display = 'block';
-                    document.getElementById('header').style.display = 'flex';
-                    document.getElementById('btn-optimizar').style.display = 'flex';
-                    initMap();
-                }
-            } catch (err) {
-                alert("Error de conexión con Supabase.");
+            if (error) {
+                document.getElementById('error-msg').innerText = "Acceso denegado.";
+                document.getElementById('error-msg').style.display = 'block';
+            } else {
+                currentUid = data.user.id; currentEmail = email;
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('main-screen').style.display = 'flex';
+                document.getElementById('user-display').innerText = email;
+                document.getElementById('user-name').innerText = email.split('@')[0].toUpperCase();
+                
+                setTimeout(() => { 
+                    initMap(); 
+                    loadData(); 
+                    seguirRepartidor(); 
+                    setInterval(loadData, 25000); // Refresco automático
+                    setInterval(intentarSincronizar, 15000); // Intenta subir datos offline cada 15 seg
+                }, 200);
             }
         }
 
         function initMap() {
-            map = L.map('map', { zoomControl: false }).setView([19.4326, -99.1332], 13);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
-            loadData();
-            setInterval(loadData, 30000); 
+            if (!map) {
+                map = L.map('map', { zoomControl: false }).setView([19.67, -99.16], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                markersGroup = L.layerGroup().addTo(map);
+                L.control.zoom({ position: 'bottomright' }).addTo(map);
+            }
+            map.invalidateSize();
         }
 
-        async function loadData() {
-            const icon = document.getElementById('sync-icon');
-            icon.classList.add('spinning');
-            try {
-                if (navigator.onLine) {
-                    const { data, error } = await _supabase.from('entregas').select('*').order('orden', { ascending: true });
-                    if (error) throw error;
-                    await db.entregas.clear();
-                    await db.entregas.bulkAdd(data);
-                    document.getElementById('offline-tag').style.display = 'none';
-                    procesarEntregas(data);
-                } else {
-                    const localData = await db.entregas.toArray();
-                    document.getElementById('offline-tag').style.display = 'block';
-                    procesarEntregas(localData);
-                }
-            } catch (e) {
-                const localData = await db.entregas.toArray();
-                procesarEntregas(localData);
-            } finally {
-                setTimeout(() => icon.classList.remove('spinning'), 1000);
+        function seguirRepartidor() {
+            if (navigator.geolocation) {
+                navigator.geolocation.watchPosition(async (pos) => {
+                    const lat = pos.coords.latitude; const lon = pos.coords.longitude;
+                    if (!userMarker) {
+                        userMarker = L.circleMarker([lat, lon], { radius: 10, fillColor: "#007AFF", color: "white", weight: 3, fillOpacity: 0.9 }).addTo(map);
+                    } else { userMarker.setLatLng([lat, lon]); }
+                    // Guardar posición para Panel Maestro (Siempre online)
+                    if (currentUid && navigator.onLine) {
+                        await _supabase.from('perfiles_repartidores').upsert({ id: currentUid, email: currentEmail, latitud: lat, longitud: lon, ultima_conexion: new Date().toISOString() });
+                    }
+                }, null, { enableHighAccuracy: true });
             }
         }
 
-        function procesarEntregas(data) {
+        // --- CARGA DE DATOS Y NUEVO POPUP OFFLINE ---
+        async function loadData() {
+            if (!currentUid) return;
+            let ayer = new Date(); ayer.setHours(ayer.getHours() - 24);
+            const { data } = await _supabase.from('entregas').select('*').eq('repartidor_id', currentUid).gte('creado_en', ayer.toISOString()).order('orden', { ascending: true });
+            if (!data) return;
             listaEntregas = data;
-            markers.forEach(m => map.removeLayer(m));
-            markers = [];
+            markersGroup.clearLayers();
 
-            const hayPendientes = data.some(item => {
+            // NUEVO: LÓGICA DE ALERTA INTELIGENTE (Cuenta pendientes y avisa solo si aumentan)
+            const pendientesActuales = data.filter(item => {
                 let st = item.estado ? item.estado.replace(/["']/g, "").toLowerCase() : "pendiente";
                 return st === 'pendiente';
-            });
+            }).length;
 
-            if (hayPendientes) {
+            if (pendientesActuales > cantidadPendientesAnterior) {
                 document.getElementById('alerta-nueva').style.display = 'flex';
-            } else {
+            } else if (pendientesActuales === 0) {
                 document.getElementById('alerta-nueva').style.display = 'none';
             }
+            cantidadPendientesAnterior = pendientesActuales; // Guarda en memoria cuántos había
 
-            data.forEach(loc => {
-                const color = loc.estado === 'pendiente' ? '#FF9500' : '#007AFF';
-                const marker = L.circleMarker([loc.latitud, loc.longitud], {
-                    radius: 12, color: 'white', weight: 3, opacity: 1, fillOpacity: 0.9, fillColor: color
-                }).addTo(map);
+            data.forEach((item, index) => {
+                let st = item.estado ? item.estado.replace(/["']/g, "").toLowerCase() : "pendiente";
+                if (st === 'entregado') return; // Desaparece si está entregado
 
-                marker.bindPopup(`<b>${loc.nombre}</b><br><button onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${loc.latitud},${loc.longitud}')">IR</button>`);
-                markers.push(marker);
-            });
-        }
+                // COLORES E ICONOS DE INVENTARIO
+                let color = "#1a73e8"; // Azul - Pendiente
+                let etiqueta = item.orden || index + 1;
 
-        function enfocarNueva() {
-            document.getElementById('alerta-nueva').style.display = 'none';
-            const pendiente = listaEntregas.find(item => item.estado === 'pendiente');
-            if (pendiente) map.flyTo([pendiente.latitud, pendiente.longitud], 17);
-        }
+                if (st === 'ausente' || st === 'nadie en casa') color = "#FFCC00"; // Amarillo - Nadie en casa
+                if (st === 'reintentar') color = "#9b59b6"; // Morado - Reintentar
+                if (st === 'perdido' || st === 'no_reintentar' || st === 'cancelado' || st === 'fuera_de_ruta') {
+                    color = "#e74c3c"; etiqueta = "⚠️"; // Rojo - Sobrante/Problema
+                }
 
-        async function optimizarRuta() {
-            alert("Optimizando...");
-        }
-    </script>
-</body>
-</html>
+                const icon = L.divIcon({ className: 'custom', html: `<div class="pin-premium" style="border-color:${color}; color:${color}">${etiqueta}</div>`, iconSize: [32, 32] });
+                
+                let phoneWA = cleanPhone(item.telefono, true);
+                let phoneCall = cleanPhone(item.telefono, false);
+
+                L.marker([item.latitud, item.longitud], {icon: icon}).addTo(markersGroup)
+                    .bindPopup(`
+                        <div class="card-popup">
+                            <div class="card-header">
+                                <h3>#${etiqueta} - ${item.nombre}</h3>
+                            </div>
