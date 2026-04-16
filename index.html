@@ -204,29 +204,43 @@
             return clean;
         }
 
-        // --- MANEJO DE SESIÓN ---
+        // --- MANEJO DE SESIÓN MEJORADO ---
         async function login() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
-
-            if (error) {
-                document.getElementById('error-msg').innerText = "Acceso denegado.";
-                document.getElementById('error-msg').style.display = 'block';
-            } else {
-                currentUid = data.user.id; currentEmail = email;
-                document.getElementById('login-screen').style.display = 'none';
-                document.getElementById('main-screen').style.display = 'flex';
-                document.getElementById('user-display').innerText = email;
-                document.getElementById('user-name').innerText = email.split('@')[0].toUpperCase();
+            try {
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
                 
-                setTimeout(() => { 
-                    initMap(); 
-                    loadData(); 
-                    seguirRepartidor(); 
-                    setInterval(loadData, 25000); // Refresco automático
-                    setInterval(intentarSincronizar, 15000); // Intenta subir datos offline cada 15 seg
-                }, 200);
+                // Mostrar que el botón sí reaccionó
+                const errorMsg = document.getElementById('error-msg');
+                errorMsg.style.display = 'block';
+                errorMsg.style.color = 'var(--primary)'; // Color azul
+                errorMsg.innerText = "Conectando con Supabase...";
+
+                const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
+
+                if (error) {
+                    // Si las credenciales están mal, lo muestra aquí
+                    errorMsg.style.color = 'var(--danger)'; // Color rojo
+                    errorMsg.innerText = "Error: " + error.message;
+                } else {
+                    currentUid = data.user.id; currentEmail = email;
+                    document.getElementById('login-screen').style.display = 'none';
+                    document.getElementById('main-screen').style.display = 'flex';
+                    document.getElementById('user-display').innerText = email;
+                    document.getElementById('user-name').innerText = email.split('@')[0].toUpperCase();
+                    
+                    setTimeout(() => { 
+                        initMap(); 
+                        loadData(); 
+                        seguirRepartidor(); 
+                        setInterval(loadData, 25000); // Refresco automático
+                        setInterval(intentarSincronizar, 15000); // Intenta subir datos offline cada 15 seg
+                    }, 200);
+                }
+            } catch (err) {
+                // Si el internet falla o hay un error grave, lo atrapamos aquí
+                alert("Error crítico de conexión: " + err.message);
+                console.error(err);
             }
         }
 
@@ -287,18 +301,4 @@
 
                 if (st === 'ausente' || st === 'nadie en casa') color = "#FFCC00"; // Amarillo - Nadie en casa
                 if (st === 'reintentar') color = "#9b59b6"; // Morado - Reintentar
-                if (st === 'perdido' || st === 'no_reintentar' || st === 'cancelado' || st === 'fuera_de_ruta') {
-                    color = "#e74c3c"; etiqueta = "⚠️"; // Rojo - Sobrante/Problema
-                }
-
-                const icon = L.divIcon({ className: 'custom', html: `<div class="pin-premium" style="border-color:${color}; color:${color}">${etiqueta}</div>`, iconSize: [32, 32] });
-                
-                let phoneWA = cleanPhone(item.telefono, true);
-                let phoneCall = cleanPhone(item.telefono, false);
-
-                L.marker([item.latitud, item.longitud], {icon: icon}).addTo(markersGroup)
-                    .bindPopup(`
-                        <div class="card-popup">
-                            <div class="card-header">
-                                <h3>#${etiqueta} - ${item.nombre}</h3>
-                            </div>
+                if (st === 'perdido' || st === 'no_reintentar' || st === 'cancelado' || st === 'fuera_de_
