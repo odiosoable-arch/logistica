@@ -26,7 +26,6 @@
             background-color: var(--bg); overflow: hidden;
         }
 
-        /* --- ESTILO DEL BANNER (ÚNICA ADICIÓN) --- */
         #alerta-nueva {
             position: fixed;
             top: 85px; left: 15px; right: 15px;
@@ -108,7 +107,7 @@
     <div id="login-screen">
         <span class="material-icons" style="font-size: 60px; color: var(--primary);">local_shipping</span>
         <h2 style="margin: 10px 0;">Logística Pro</h2>
-        <input type="text" id="user" placeholder="Usuario">
+        <input type="text" id="user" placeholder="Correo / Usuario">
         <input type="password" id="pass" placeholder="Contraseña">
         <button onclick="login()">Entrar al Sistema</button>
     </div>
@@ -125,7 +124,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // --- AQUÍ PEGA TUS LLAVES ---
         const SUPABASE_URL = "https://dmmjjcgruacwbmbicbyg.supabase.co";
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbWpqY2dydWFjd2JtYmljYnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDI2NTYsImV4cCI6MjA5MTcxODY1Nn0.wIMdzc8gEycItKvPGvRmSu90kSsOxviTOgnMNIF4dJs";
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -135,27 +133,26 @@
 
         let map, markers = [], listaEntregas = [];
 
-        // --- ESTE ES TU LOGIN ORIGINAL QUE CONSULTA SUPABASE ---
+        // --- SISTEMA DE AUTENTICACIÓN OFICIAL DE SUPABASE ---
         async function login() {
             const u = document.getElementById('user').value;
             const p = document.getElementById('pass').value;
 
             try {
-                const { data, error } = await _supabase
-                    .from('usuarios') // Cambia 'usuarios' por el nombre real de tu tabla si es diferente
-                    .select('*')
-                    .eq('usuario', u)
-                    .eq('password', p)
-                    .single();
+                // Esto conecta directo con la pestaña de Auth de Supabase
+                const { data, error } = await _supabase.auth.signInWithPassword({
+                    email: u,
+                    password: p
+                });
 
-                if (data) {
+                if (error) {
+                    alert("Error: " + error.message);
+                } else if (data.session) {
                     document.getElementById('login-screen').style.display = 'none';
                     document.getElementById('map').style.display = 'block';
                     document.getElementById('header').style.display = 'flex';
                     document.getElementById('btn-optimizar').style.display = 'flex';
                     initMap();
-                } else {
-                    alert("Credenciales incorrectas en la base de datos.");
                 }
             } catch (err) {
                 alert("Error de conexión con Supabase.");
@@ -166,7 +163,7 @@
             map = L.map('map', { zoomControl: false }).setView([19.4326, -99.1332], 13);
             L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
             loadData();
-            setInterval(loadData, 30000); // Revisa cada 30 seg
+            setInterval(loadData, 30000); 
         }
 
         async function loadData() {
@@ -198,7 +195,6 @@
             markers.forEach(m => map.removeLayer(m));
             markers = [];
 
-            // DETECCIÓN DE PENDIENTES PARA EL BANNER
             const hayPendientes = data.some(item => {
                 let st = item.estado ? item.estado.replace(/["']/g, "").toLowerCase() : "pendiente";
                 return st === 'pendiente';
@@ -228,7 +224,6 @@
         }
 
         async function optimizarRuta() {
-            // ... (Tu lógica de optimización original intacta)
             alert("Optimizando...");
         }
     </script>
