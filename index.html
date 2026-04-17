@@ -1,1 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Logística Pro v20.0</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script> 
+    <style>
+        :root { --primary: #007AFF; --success: #34C759; --warning: #FF9500; --danger: #FF3B30; --purple: #AF52DE; --bg: #F2F2F7; }
+        html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, sans-serif; background: var(--bg); overflow: hidden; }
+        .header { background: white; height: 95px; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05); z-index: 2000; position: relative; }
+        .btn-header-group { display: flex; gap: 8px; margin-top: 8px; }
+        .btn-opt, .btn-scan { color: white; border: none; padding: 10px 14px; border-radius: 12px; font-weight: 700; font-size: 11px; display: flex; align-items: center; gap: 5px; }
+        .btn-opt { background: var(--warning); } .btn-scan { background: var(--primary); }
+        #map { height: calc(100% - 95px); width: 100%; }
+        #btn-centrar { position: absolute; bottom: 30px; right: 20px; z-index: 3000; background: white; border: none; width: 56px; height: 56px; border-radius: 50%; box-shadow: 0 4px 15px rgba(0,0,0,0.2); color: var(--primary); display: flex; align-items: center; justify-content: center; }
+        .pin-premium { background: white; border: 3px solid; border-radius: 50%; font-weight: 800; text-align: center; line-height: 28px; font-size: 13px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .card-popup { min-width: 240px; padding: 5px; }
+        .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+        .btn-action { padding: 12px; border-radius: 12px; color: white; font-weight: 700; display: flex; flex-direction: column; align-items: center; border: none; text-decoration: none; }
+        .select-status { width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #DDD; margin-bottom: 8px; font-weight: 600; }
+        #sync-indicator { position: fixed; top: 110px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 8px 16px; border-radius: 20px; z-index: 5000; display: none; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div id="sync-indicator">Sincronizando...</div>
+    <div class="header">
+        <div>
+            <b id="user-display">Repartidor</b>
+            <div class="btn-header-group">
+                <button onclick="optimizarRuta()" class="btn-opt">OPTIMIZAR</button>
+                <button onclick="escanearEtiqueta()" class="btn-scan">ESCANEAR</button>
+            </div>
+        </div>
+        <button onclick="location.reload()" style="background:#EEE; border:none; padding:10px; border-radius:12px;">Salir</button>
+    </div>
+    <div id="map"></div>
+    <button id="btn-centrar" onclick="centrarEnMi()"><span class="material-icons">my_location</span></button>
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const _supabase = supabase.createClient('https://dmmjjcgruacwbmbicbyg.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbWpqY2dydWFjd2JtYmljYnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDI2NTYsImV4cCI6MjA5MTcxODY1Nn0.wIMdzc8gEycItKvPGvRmSu90kSsOxviTOgnMNIF4dJs');
+        let map, markersGroup, userMarker, currentUid = "TU_USER_ID", listaEntregas = [];
+
+        function initMap() {
+            map = L.map('map', { zoomControl: false }).setView([19.67, -99.16], 12);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+            markersGroup = L.layerGroup().addTo(map);
+            loadData();
+        }
+
+        async function loadData() {
+            const { data } = await _supabase.from('entregas').select('*').order('orden', { ascending: true });
+            if (data) { listaEntregas = data; renderMarkers(data, false); }
+        }
+
+        function renderMarkers(data, esOptimizado) {
+            markersGroup.clearLayers(); // ESTO MATA LOS DUPLICADOS
+            data.forEach((item, index) => {
+                let st = (item.estado || "pendiente").toLowerCase();
+                if (st === 'entregado') return;
+                let label = esOptimizado ? (index + 1) : (item.orden || index + 1);
+                let color = "--primary"; 
+                if (['ausente', 'reintentar'].includes(st)) color = "#FF9500";
+                if (['cancelado', 'no entregado'].includes(st)) { color = "#FF3B30"; label = "⚠️"; }
+                
+                const icon = L.divIcon({ className: 'custom', html: `<div class="pin-premium" style="border-color:${color}; color:${color}">${label}</div>`, iconSize: [32,32] });
+                const tel = item.telefono ? item.telefono.toString().replace(/\D/g, '') : "";
+                
+                L.marker([item.latitud, item.longitud], {icon: icon}).addTo(markersGroup).bindPopup(`
+                    <div class="card-popup">
+                        <h3>#${label} - ${item.nombre}</h3>
+                        <div class="action-grid">
+                            <a href="tel:${tel}" class="btn-action" style="background:var(--primary)">Llamar</a>
+                            <a href="https://wa.me/52${tel}" class="btn-action" style="background:var(--success)">WhatsApp</a>
+                        </div>
+                        <select onchange="actualizarEstado(${item.id}, this.value)" class="select-status">
+                            <option value="">${st.toUpperCase()}</option>
+                            <option value="entregado">ENTREGADO</option>
+                            <option value="ausente">AUSENTE</option>
+                            <option value="reintentar">REINTENTAR</option>
+                            <option value="cancelado">CANCELADO</option>
+                        </select>
+                    </div>
+                `);
+            });
+        }
+
+        function optimizarRuta() {
+            if (!userMarker) return alert("Esperando GPS...");
+            const miPos = userMarker.getLatLng();
+            let ruta = [...listaEntregas].sort((a,b) => L.latLng(a.latitud, a.longitud).distanceTo(miPos) - L.latLng(b.latitud, b.longitud).distanceTo(miPos));
+            renderMarkers(ruta, true);
+        }
+
+        function seguirRepartidor() {
+            navigator.geolocation.watchPosition(pos => {
+                const lat = pos.coords.latitude, lon = pos.coords.longitude;
+                if (!userMarker) userMarker = L.circleMarker([lat, lon], {radius:8, fillColor: "#007AFF", color:"#FFF", weight:3, fillOpacity:1}).addTo(map);
+                else userMarker.setLatLng([lat, lon]);
+            }, null, {enableHighAccuracy:true});
+        }
+
+        async function escanearEtiqueta() {
+            const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment';
+            input.onchange = async (e) => {
+                const file = e.target.files[0]; if (!file) return;
+                document.getElementById('sync-indicator').style.display = 'block';
+                const fileName = `scan_${Date.now()}.jpg`;
+                const { data } = await _supabase.storage.from('evidencias').upload(fileName, file);
+                if (data) {
+                    const { data: pUrl } = _supabase.storage.from('evidencias').getPublicUrl(fileName);
+                    await fetch('https://hook.eu1.make.com/4j6fnhrtd22doelg7nvarndhnh55yp96', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url_etiqueta: pUrl.publicUrl }) });
+                    alert("Enviado a Make");
+                }
+                document.getElementById('sync-indicator').style.display = 'none';
+            };
+            input.click();
+        }
+
+        initMap(); seguirRepartidor();
+    </script>
+</body>
+</html>
