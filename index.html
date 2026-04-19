@@ -1,1 +1,216 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Logística Carlos v31.5 - EL REGRESO DEL MAESTRO</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        :root { --primary: #007AFF; --success: #34C759; --warning: #FF9500; --danger: #FF3B30; --purple: #AF52DE; --bg: #F2F2F7; }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; height: 100%; width: 100%; font-family: -apple-system, sans-serif; background: var(--bg); overflow: hidden; display: flex; flex-direction: column; }
+        
+        /* LOGIN MEJORADO */
+        #login-screen { position: fixed; inset: 0; background: white; z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .login-card { width: 100%; max-width: 350px; text-align: center; }
+        .login-card input { width: 100%; padding: 15px; margin: 10px 0; border-radius: 12px; border: 1px solid #ddd; font-size: 16px; }
+        .btn-login { width: 100%; padding: 16px; background: var(--primary); color: white; border: none; border-radius: 12px; font-weight: bold; }
 
+        /* HEADER */
+        .header { background: white; height: 100px; padding: 0 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 2000; }
+        .btn-header-group { display: flex; gap: 8px; margin-top: 5px; }
+        .btn-opt, .btn-scan { color: white; border: none; padding: 10px 12px; border-radius: 10px; font-weight: 700; font-size: 11px; display: flex; align-items: center; gap: 5px; }
+        .btn-opt { background: var(--purple); } .btn-scan { background: var(--primary); }
+
+        /* MAPA */
+        #map { flex-grow: 1; width: 100%; z-index: 1; }
+        #btn-centrar { position: absolute; bottom: 30px; right: 20px; z-index: 3000; background: white; border: none; width: 60px; height: 60px; border-radius: 50%; box-shadow: 0 4px 20px rgba(0,0,0,0.3); color: var(--primary); display: flex; align-items: center; justify-content: center; }
+
+        /* POPUP Y PINS */
+        .pin-premium { background: white; border: 3px solid; border-radius: 50%; font-weight: 800; text-align: center; line-height: 28px; font-size: 13px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .card-popup { min-width: 250px; padding: 5px; }
+        .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+        .btn-action { padding: 12px; border-radius: 12px; color: white; border: none; display: flex; flex-direction: column; align-items: center; text-decoration: none; font-weight: bold; font-size: 10px; }
+        .btn-evidencia { width: 100%; background: var(--warning); color: white; border: none; padding: 14px; border-radius: 12px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .select-status { width: 100%; padding: 12px; border-radius: 10px; border: 2px solid #DDD; background: white; font-weight: bold; font-size: 13px; }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen">
+        <div class="login-card">
+            <span class="material-icons" style="font-size: 60px; color: var(--primary)">local_shipping</span>
+            <h2>Carlos Logística</h2>
+            <input type="email" id="email" placeholder="Usuario">
+            <input type="password" id="password" placeholder="Contraseña">
+            <button onclick="login()" class="btn-login">ENTRAR</button>
+        </div>
+    </div>
+
+    <div class="header">
+        <div><b id="user-display">CONECTANDO...</b>
+            <div class="btn-header-group">
+                <button onclick="optimizarRuta()" class="btn-opt"><span class="material-icons">route</span> OPTIMIZAR</button>
+                <button onclick="escanearEtiqueta()" class="btn-scan"><span class="material-icons">qr_code_scanner</span> GUÍA</button>
+            </div>
+        </div>
+        <button onclick="location.reload()" style="background:#FEE; border:none; padding:10px; border-radius:10px; color:var(--danger); font-weight:bold;">Salir</button>
+    </div>
+
+    <div id="map"></div>
+    <button id="btn-centrar" onclick="centrarEnMi()"><span class="material-icons" style="font-size:30px;">my_location</span></button>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const _supabase = supabase.createClient('https://dmmjjcgruacwbmbicbyg.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbWpqY2dydWFjd2JtYmljYnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDI2NTYsImV4cCI6MjA5MTcxODY1Nn0.wIMdzc8gEycItKvPGvRmSu90kSsOxviTOgnMNIF4dJs');
+        let map, markersGroup, userMarker, currentUid, listaEntregas = [], mapaSecuencia = {};
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
+            if (error) return alert("Error de acceso");
+            currentUid = data.user.id;
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('user-display').innerText = email.split('@')[0].toUpperCase();
+            initMap();
+        }
+
+        function initMap() {
+            map = L.map('map', { zoomControl: false, attributionControl: false }).setView([19.67, -99.16], 12);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
+            markersGroup = L.layerGroup().addTo(map);
+            seguirRepartidor();
+            loadData();
+            setInterval(loadData, 25000);
+        }
+
+        async function loadData() {
+            const { data } = await _supabase.from('entregas').select('*').eq('repartidor_id', currentUid);
+            if (data) {
+                listaEntregas = data;
+                renderMarkers(data);
+            }
+        }
+
+        function renderMarkers(data) {
+            markersGroup.clearLayers();
+            data.forEach((item) => {
+                const st = (item.estado || "pendiente").toLowerCase();
+                if (st === 'entregado' || st === 'paquete perdido') return;
+
+                let label = mapaSecuencia[item.id] || "•";
+                let color = "var(--primary)";
+                if (st === 'nadie en casa' || st === 'reintentar') color = "var(--warning)";
+                if (st === 'rechazado') color = "var(--danger)";
+
+                let raw = item.telefono ? item.telefono.toString().replace(/\D/g, '') : "";
+                let telLlamada = raw.slice(-10); 
+                let telWA = raw.startsWith('52') ? raw : "52" + telLlamada;
+
+                const icon = L.divIcon({ className: 'custom', html: `<div class="pin-premium" style="border-color:${color}; color:${color}">${label}</div>`, iconSize: [32, 32] });
+
+                L.marker([item.latitud, item.longitud], { icon }).addTo(markersGroup).bindPopup(`
+                    <div class="card-popup">
+                        <b style="font-size:16px">${item.nombre || 'S/N'}</b><br>
+                        <small style="color:gray">${item.direccion || ''}</small>
+                        <div class="action-grid">
+                            <a href="tel:${telLlamada}" class="btn-action" style="background:var(--primary)"><span class="material-icons">call</span>LLAMAR</a>
+                            <a href="https://wa.me/${telWA}" target="_blank" class="btn-action" style="background:var(--success)"><span class="material-icons">chat</span>WHATSAPP</a>
+                        </div>
+                        <button onclick="capturarEvidencia(${item.id})" class="btn-evidencia">
+                            <span class="material-icons">photo_camera</span> TOMAR FOTO (EVIDENCIA)
+                        </button>
+                        <select class="select-status" onchange="actualizarEstatus(${item.id}, this.value)">
+                            <option value="">ESTATUS: ${st.toUpperCase()}</option>
+                            <option value="pendiente">⏳ PENDIENTE</option>
+                            <option value="entregado" disabled style="color:#CCC">✅ ENTREGADO (REQUERIDO FOTO)</option>
+                            <option value="nadie en casa">🏠 NADIE EN CASA</option>
+                            <option value="reintentar">🔄 REINTENTAR</option>
+                            <option value="rechazado">❌ RECHAZADO</option>
+                            <option value="paquete perdido">⚠️ PAQUETE PERDIDO</option>
+                        </select>
+                        <p style="font-size:11px; color:#666; margin-top:8px;">Ref: ${item.referencias || 'S/R'}</p>
+                    </div>
+                `);
+            });
+        }
+
+        async function capturarEvidencia(id) {
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const latReal = pos.coords.latitude;
+                const lonReal = pos.coords.longitude;
+                const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment';
+                input.onchange = async (e) => {
+                    const file = e.target.files[0]; if (!file) return;
+                    alert("Validando ubicación y subiendo foto...");
+                    const fileName = `evid_${id}_${Date.now()}.jpg`;
+                    const { data: storeData } = await _supabase.storage.from('evidencias').upload(fileName, file);
+                    if (storeData) {
+                        const { data: pUrl } = _supabase.storage.from('evidencias').getPublicUrl(fileName);
+                        const { data: entrega } = await _supabase.from('entregas').select('direccion').eq('id', id).single();
+                        
+                        await _supabase.from('entregas').update({ 
+                            foto_url: pUrl.publicUrl, estado: 'entregado', latitud: latReal, longitud: lonReal 
+                        }).eq('id', id);
+
+                        if (entrega && entrega.direccion) {
+                            await _supabase.from('direcciones_maestras').upsert({ 
+                                direccion_texto: entrega.direccion, latitud: latReal, longitud: lonReal
+                            }, { onConflict: 'direccion_texto' }); 
+                        }
+                        delete mapaSecuencia[id];
+                        alert("Entrega confirmada y ubicación maestra actualizada.");
+                        loadData();
+                    }
+                };
+                input.click();
+            }, (err) => alert("GPS Obligatorio"), { enableHighAccuracy: true });
+        }
+
+        async function actualizarEstatus(id, valor) {
+            if(!valor) return;
+            if(valor === 'entregado') { alert("Usa el botón de foto para entregar."); loadData(); return; }
+            await _supabase.from('entregas').update({ estado: valor }).eq('id', id);
+            if (valor === 'paquete perdido') delete mapaSecuencia[id];
+            loadData();
+        }
+
+        function optimizarRuta() {
+            if (!userMarker) return alert("Buscando señal GPS...");
+            let ruta = [...listaEntregas].filter(i => { const s = (i.estado || "").toLowerCase(); return s !== 'entregado' && s !== 'paquete perdido'; })
+            .sort((a, b) => L.latLng(a.latitud, a.longitud).distanceTo(userMarker.getLatLng()) - L.latLng(b.latitud, b.longitud).distanceTo(userMarker.getLatLng()));
+            mapaSecuencia = {};
+            ruta.forEach((item, index) => mapaSecuencia[item.id] = index + 1);
+            renderMarkers(listaEntregas);
+        }
+
+        function seguirRepartidor() {
+            navigator.geolocation.watchPosition(pos => {
+                const coords = [pos.coords.latitude, pos.coords.longitude];
+                if (!userMarker) userMarker = L.circleMarker(coords, { radius: 10, fillColor: "#007AFF", color: "white", weight: 3, fillOpacity: 1 }).addTo(map);
+                else userMarker.setLatLng(coords);
+            }, null, { enableHighAccuracy: true });
+        }
+
+        function centrarEnMi() { if (userMarker) map.flyTo(userMarker.getLatLng(), 17); }
+
+        async function escanearEtiqueta() {
+            const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment';
+            input.onchange = async (e) => {
+                const file = e.target.files[0]; if (!file) return;
+                const fileName = `scan_${Date.now()}.jpg`;
+                const { data } = await _supabase.storage.from('evidencias').upload(fileName, file);
+                if (data) {
+                    const { data: pUrl } = _supabase.storage.from('evidencias').getPublicUrl(fileName);
+                    await fetch('https://hook.eu1.make.com/4j6fnhrtd22doelg7nvarndhnh55yp96', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url_etiqueta: pUrl.publicUrl, repartidor_id: currentUid }) });
+                    alert("Enviado a proceso.");
+                }
+            };
+            input.click();
+        }
+    </script>
+</body>
+</html>
