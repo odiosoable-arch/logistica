@@ -3,110 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Logística Carlos v27.5</title>
-    
+    <title>Logística Carlos v29.0</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    
     <style>
-        :root {
-            --primary: #007AFF;
-            --success: #34C759;
-            --warning: #FF9500;
-            --danger: #FF3B30;
-            --purple: #AF52DE;
-            --bg: #F2F2F7;
-        }
-
-        html, body { 
-            margin: 0; padding: 0; height: 100%; width: 100%; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            background: var(--bg); overflow: hidden; 
-        }
-
-        /* Pantalla de Login */
-        #login-screen {
-            position: fixed; inset: 0; background: white; z-index: 9999;
-            display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px;
-        }
-        .login-card { width: 100%; max-width: 340px; text-align: center; }
-        .login-card input {
-            width: 100%; padding: 16px; margin-bottom: 12px; border: 1px solid #DDD;
-            border-radius: 14px; font-size: 16px; box-sizing: border-box;
-        }
-        .btn-login {
-            width: 100%; padding: 16px; background: var(--primary); color: white;
-            border: none; border-radius: 14px; font-weight: 700; cursor: pointer; font-size: 16px;
-        }
-
-        /* Cabecera de la App */
-        .header {
-            background: white; height: 100px; padding: 0 20px;
-            display: flex; justify-content: space-between; align-items: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 2000; position: relative;
-        }
-        .user-info b { font-size: 18px; color: #333; display: block; }
-        .btn-header-group { display: flex; gap: 8px; margin-top: 8px; }
+        :root { --primary: #007AFF; --success: #34C759; --warning: #FF9500; --danger: #FF3B30; --purple: #AF52DE; --bg: #F2F2F7; }
+        html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, sans-serif; background: var(--bg); overflow: hidden; }
         
-        .btn-opt, .btn-scan {
-            color: white; border: none; padding: 10px 14px; border-radius: 10px;
-            font-weight: 700; font-size: 11px; display: flex; align-items: center; gap: 5px; cursor: pointer;
-        }
-        .btn-opt { background: var(--purple); }
-        .btn-scan { background: var(--primary); }
-        .btn-salir {
-            background: #FEE; border: none; padding: 10px; border-radius: 10px;
-            color: var(--danger); font-weight: bold; cursor: pointer;
-        }
+        .header { background: white; height: 100px; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 2000; position: relative; }
+        .btn-header-group { display: flex; gap: 8px; margin-top: 8px; }
+        .btn-opt, .btn-scan { color: white; border: none; padding: 10px 14px; border-radius: 10px; font-weight: 700; font-size: 11px; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+        .btn-opt { background: var(--purple); } .btn-scan { background: var(--primary); }
+        .btn-salir { background: #FEE; border: none; padding: 10px; border-radius: 10px; color: var(--danger); font-weight: bold; }
 
-        /* Mapa y Controles */
         #map { height: calc(100% - 100px); width: 100%; z-index: 1; }
-        #btn-centrar {
-            position: absolute; bottom: 30px; right: 20px; z-index: 3000;
-            background: white; border: none; width: 60px; height: 60px;
-            border-radius: 50%; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            color: var(--primary); display: flex; align-items: center; justify-content: center;
+        
+        /* Banner de Notificación Actualizado */
+        #notificacion { 
+            position: fixed; top: 110px; left: 50%; transform: translateX(-50%); 
+            background: var(--success); color: white; padding: 10px 20px; 
+            border-radius: 20px; font-weight: bold; z-index: 4000; display: none; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2); font-size: 13px;
         }
 
-        /* Marcadores y Popups */
-        .pin-premium {
-            background: white; border: 3px solid; border-radius: 50%;
-            font-weight: 800; text-align: center; line-height: 28px;
-            font-size: 13px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-        }
+        #btn-centrar { position: absolute; bottom: 30px; right: 20px; z-index: 3000; background: white; border: none; width: 60px; height: 60px; border-radius: 50%; box-shadow: 0 4px 20px rgba(0,0,0,0.3); color: var(--primary); display: flex; align-items: center; justify-content: center; }
+        .pin-premium { background: white; border: 3px solid; border-radius: 50%; font-weight: 800; text-align: center; line-height: 28px; font-size: 13px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        
         .card-popup { min-width: 250px; padding: 5px; }
         .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
-        .btn-action {
-            padding: 12px; border-radius: 12px; color: white; border: none;
-            display: flex; flex-direction: column; align-items: center;
-            text-decoration: none; font-weight: bold; font-size: 10px; text-align: center;
-        }
-        .btn-evidencia {
-            width: 100%; background: var(--warning); color: white; border: none;
-            padding: 14px; border-radius: 12px; font-weight: 700; margin-bottom: 10px;
-            display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;
-        }
-        .select-status {
-            width: 100%; padding: 12px; border-radius: 12px; border: 2px solid #EEE;
-            background: #F9F9F9; font-weight: bold; font-size: 14px; color: #333;
-        }
+        .btn-action { padding: 12px; border-radius: 12px; color: white; border: none; display: flex; flex-direction: column; align-items: center; text-decoration: none; font-weight: bold; font-size: 10px; }
+        .btn-evidencia { width: 100%; background: var(--warning); color: white; border: none; padding: 14px; border-radius: 12px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .select-status { width: 100%; padding: 12px; border-radius: 12px; border: 2px solid #EEE; background: #F9F9F9; font-weight: bold; font-size: 14px; }
+
+        #login-screen { position: fixed; inset: 0; background: white; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; }
     </style>
 </head>
 <body>
 
+    <div id="notificacion" onclick="forzarRecarga()">NUEVAS UBICACIONES DISPONIBLES (TAP AQUÍ)</div>
+
     <div id="login-screen">
-        <div class="login-card">
-            <span class="material-icons" style="font-size: 70px; color: var(--primary); margin-bottom: 10px;">local_shipping</span>
-            <h2>Logística Carlos</h2>
-            <input type="email" id="email" placeholder="Usuario / Email">
-            <input type="password" id="password" placeholder="Contraseña">
-            <button class="btn-login" onclick="login()">ENTRAR AL SISTEMA</button>
-        </div>
+        <span class="material-icons" style="font-size: 70px; color: var(--primary)">local_shipping</span>
+        <h2>Carlos Logística</h2>
+        <input type="email" id="email" placeholder="Usuario" style="width:100%; max-width:300px; padding:15px; margin:10px; border-radius:10px; border:1px solid #ccc;">
+        <input type="password" id="password" placeholder="Contraseña" style="width:100%; max-width:300px; padding:15px; margin:10px; border-radius:10px; border:1px solid #ccc;">
+        <button onclick="login()" style="width:100%; max-width:300px; padding:15px; background:var(--primary); color:white; border:none; border-radius:10px; font-weight:bold;">ENTRAR</button>
     </div>
 
     <div class="header">
-        <div class="user-info">
-            <b id="user-display">REPARTIDOR</b>
+        <div>
+            <b id="user-display">CARGANDO...</b>
             <div class="btn-header-group">
                 <button onclick="optimizarRuta()" class="btn-opt"><span class="material-icons" style="font-size:16px">route</span> RUTA</button>
                 <button onclick="escanearEtiqueta()" class="btn-scan"><span class="material-icons" style="font-size:16px">photo_camera</span> ESCANEAR</button>
@@ -120,65 +66,54 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
     <script>
-        // Configuración de Supabase
         const _supabase = supabase.createClient('https://dmmjjcgruacwbmbicbyg.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbWpqY2dydWFjd2JtYmljYnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDI2NTYsImV4cCI6MjA5MTcxODY1Nn0.wIMdzc8gEycItKvPGvRmSu90kSsOxviTOgnMNIF4dJs');
         
         let map, markersGroup, userMarker, currentUid, listaEntregas = [], esRutaOptimizada = false;
 
-        // --- GESTIÓN DE ACCESO ---
         async function login() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
-            
-            if (error) return alert("Credenciales incorrectas");
-            
+            if (error) return alert("Error de acceso");
             currentUid = data.user.id;
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('user-display').innerText = email.split('@')[0].toUpperCase();
             initMap();
         }
 
-        // --- MAPA E HILOS DE TIEMPO ---
         function initMap() {
             map = L.map('map', { zoomControl: false }).setView([19.67, -99.16], 12);
             L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
             markersGroup = L.layerGroup().addTo(map);
-            
             seguirRepartidor();
             loadData();
             
-            // Refresco automático cada 30 seg (solo si no estamos en modo ruta)
-            setInterval(() => {
-                if (!esRutaOptimizada) loadData();
-            }, 30000);
+            // Escucha cambios en tiempo real de Supabase para el banner
+            _supabase.channel('cambios-entregas')
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'entregas' }, payload => {
+                    if(payload.new.repartidor_id === currentUid) {
+                        document.getElementById('notificacion').style.display = 'block';
+                    }
+                })
+                .subscribe();
+
+            // Refresco automático de datos (solo si no hay ruta activa)
+            setInterval(() => { if(!esRutaOptimizada) loadData(); }, 30000);
         }
 
-        function seguirRepartidor() {
-            navigator.geolocation.watchPosition(pos => {
-                const lat = pos.coords.latitude, lon = pos.coords.longitude;
-                if (!userMarker) {
-                    userMarker = L.circleMarker([lat, lon], { radius: 10, fillColor: "#007AFF", color: "white", weight: 3, fillOpacity: 1 }).addTo(map);
-                } else {
-                    userMarker.setLatLng([lat, lon]);
-                }
-            }, null, { enableHighAccuracy: true });
-        }
-
-        function centrarEnMi() {
-            if (userMarker) map.flyTo(userMarker.getLatLng(), 16);
-        }
-
-        // --- DATOS Y RENDERIZADO ---
         async function loadData() {
-            if (esRutaOptimizada) return;
             const { data } = await _supabase.from('entregas').select('*').eq('repartidor_id', currentUid);
             if (data) {
                 listaEntregas = data;
-                renderMarkers(data, false);
+                if (!esRutaOptimizada) renderMarkers(data, false);
             }
+        }
+
+        function forzarRecarga() {
+            esRutaOptimizada = false;
+            document.getElementById('notificacion').style.display = 'none';
+            loadData();
         }
 
         function renderMarkers(data, esOpt) {
@@ -191,15 +126,17 @@
 
                 let label = esOpt ? (index + 1) : "•";
                 let color = "var(--primary)";
-                
-                // Colores por Estatus
                 if (['ausente', 'reintentar'].includes(st)) color = "var(--warning)";
-                if (['cancelado', 'no entregado'].includes(st)) { color = "var(--danger)"; label = "!"; }
                 if (st === 'recolectado') color = "var(--success)";
 
-                // Lógica de Teléfono (WhatsApp Inteligente)
-                let telRaw = item.telefono ? item.telefono.toString().replace(/\D/g, '') : "";
-                let telFinal = (telRaw.length === 10) ? "52" + telRaw : telRaw;
+                // LÓGICA DE TELÉFONOS CORREGIDA
+                let raw = item.telefono ? item.telefono.toString().replace(/\D/g, '') : "";
+                
+                // Para LLAMADA: Exactamente los últimos 10 dígitos (Formato MX)
+                let telLlamada = raw.slice(-10); 
+                
+                // Para WhatsApp: Necesita prefijo 52 (sin el 1 intermedio)
+                let telWA = raw.startsWith('52') ? raw : "52" + telLlamada;
 
                 const icon = L.divIcon({
                     className: 'custom',
@@ -209,14 +146,14 @@
 
                 L.marker([item.latitud, item.longitud], { icon }).addTo(markersGroup).bindPopup(`
                     <div class="card-popup">
-                        <b style="font-size:16px">${item.nombre || 'SIN NOMBRE'}</b><br>
+                        <b style="font-size:16px">${item.nombre || 'S/N'}</b><br>
                         <small style="color:gray">${item.direccion || ''}</small>
                         <div class="action-grid">
-                            <a href="tel:${telRaw}" class="btn-action" style="background:var(--primary)"><span class="material-icons">call</span>LLAMAR</a>
-                            <a href="https://wa.me/${telFinal}" target="_blank" class="btn-action" style="background:var(--success)"><span class="material-icons">chat</span>WHATSAPP</a>
+                            <a href="tel:${telLlamada}" class="btn-action" style="background:var(--primary)"><span class="material-icons">call</span>LLAMAR</a>
+                            <a href="https://wa.me/${telWA}" target="_blank" class="btn-action" style="background:var(--success)"><span class="material-icons">chat</span>WHATSAPP</a>
                         </div>
                         <button onclick="capturarEvidencia(${item.id})" class="btn-evidencia">
-                            <span class="material-icons">photo_camera</span> TOMAR FOTO EVIDENCIA
+                            <span class="material-icons">photo_camera</span> EVIDENCIA / FOTO
                         </button>
                         <select class="select-status" onchange="actualizarEstatus(${item.id}, this.value)">
                             <option value="">ESTATUS: ${st.toUpperCase()}</option>
@@ -224,52 +161,50 @@
                             <option value="recolectado">📦 RECOLECTADO</option>
                             <option value="ausente">🏠 NADIE EN CASA</option>
                             <option value="reintentar">🔄 REINTENTAR</option>
-                            <option value="cancelado">🚫 CANCELADO</option>
                         </select>
-                        <p style="font-size:11px; margin-top:10px; border-top:1px solid #EEE; padding-top:5px;">
-                            <b>Ref:</b> ${item.referencias || 'S/R'}
-                        </p>
+                        <p style="font-size:11px; color:#555; margin-top:10px;">Ref: ${item.referencias || 'S/R'}</p>
                     </div>
                 `);
             });
         }
 
-        // --- ACCIONES ---
-        async function actualizarEstatus(id, valor) {
-            if (!valor) return;
-            const { error } = await _supabase.from('entregas').update({ estado: valor }).eq('id', id);
-            if (!error) {
-                esRutaOptimizada = false;
-                loadData();
-            }
-        }
-
         function optimizarRuta() {
             if (!userMarker) return alert("Esperando GPS...");
             const miPos = userMarker.getLatLng();
-            
             let ruta = [...listaEntregas].filter(i => (i.estado || "").toLowerCase() !== 'entregado')
                 .sort((a, b) => L.latLng(a.latitud, a.longitud).distanceTo(miPos) - L.latLng(b.latitud, b.longitud).distanceTo(miPos));
-            
             renderMarkers(ruta, true);
-            alert("Ruta fijada. Auto-refresco pausado.");
         }
+
+        async function actualizarEstatus(id, valor) {
+            if(!valor) return;
+            await _supabase.from('entregas').update({ estado: valor }).eq('id', id);
+            // Al actualizar un estado, permitimos un refresco para limpiar el mapa
+            esRutaOptimizada = false;
+            loadData();
+        }
+
+        function seguirRepartidor() {
+            navigator.geolocation.watchPosition(pos => {
+                const lat = pos.coords.latitude, lon = pos.coords.longitude;
+                if (!userMarker) userMarker = L.circleMarker([lat, lon], { radius: 10, fillColor: "#007AFF", color: "white", weight: 3, fillOpacity: 1 }).addTo(map);
+                else userMarker.setLatLng([lat, lon]);
+            }, null, { enableHighAccuracy: true });
+        }
+
+        function centrarEnMi() { if (userMarker) map.flyTo(userMarker.getLatLng(), 17); }
 
         async function capturarEvidencia(id) {
             const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment';
             input.onchange = async (e) => {
                 const file = e.target.files[0]; if (!file) return;
-                alert("Subiendo imagen...");
+                alert("Subiendo foto...");
                 const fileName = `evid_${id}_${Date.now()}.jpg`;
-                const { data, error } = await _supabase.storage.from('evidencias').upload(fileName, file);
-                
+                const { data } = await _supabase.storage.from('evidencias').upload(fileName, file);
                 if (data) {
                     const { data: pUrl } = _supabase.storage.from('evidencias').getPublicUrl(fileName);
-                    await _supabase.from('entregas').update({ 
-                        foto_url: pUrl.publicUrl, 
-                        estado: 'entregado' 
-                    }).eq('id', id);
-                    alert("Entrega confirmada.");
+                    await _supabase.from('entregas').update({ foto_url: pUrl.publicUrl, estado: 'entregado' }).eq('id', id);
+                    esRutaOptimizada = false;
                     loadData();
                 }
             };
@@ -280,10 +215,8 @@
             const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment';
             input.onchange = async (e) => {
                 const file = e.target.files[0]; if (!file) return;
-                alert("Procesando guía...");
                 const fileName = `scan_${Date.now()}.jpg`;
                 const { data } = await _supabase.storage.from('evidencias').upload(fileName, file);
-                
                 if (data) {
                     const { data: pUrl } = _supabase.storage.from('evidencias').getPublicUrl(fileName);
                     await fetch('https://hook.eu1.make.com/4j6fnhrtd22doelg7nvarndhnh55yp96', { 
@@ -291,7 +224,7 @@
                         headers: {'Content-Type': 'application/json'}, 
                         body: JSON.stringify({ url_etiqueta: pUrl.publicUrl, repartidor_id: currentUid }) 
                     });
-                    alert("Guía enviada a procesamiento.");
+                    alert("Guía enviada.");
                 }
             };
             input.click();
