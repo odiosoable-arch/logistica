@@ -1,1 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Logística Carlos v31.5 - EL REGRESO DEL MAESTRO</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        :root { --primary: #007AFF; --success: #34C759; --warning: #FF9500; --danger: #FF3B30; --purple: #AF52DE; --bg: #F2F2F7; }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; height: 100%; width: 100%; font-family: -apple-system, sans-serif; background: var(--bg); overflow: hidden; display: flex; flex-direction: column; }
+        
+        /* LOGIN MEJORADO */
+        #login-screen { position: fixed; inset: 0; background: white; z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .login-card { width: 100%; max-width: 350px; text-align: center; }
+        .login-card img { width: 80px; margin-bottom: 20px; }
+        .login-card h2 { margin-bottom: 10px; color: #1c1c1e; }
+        .login-card p { color: #8e8e93; margin-bottom: 20px; }
+        input[type="email"], input[type="password"] { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; outline: none; background: #f9f9f9; }
+        .btn-login { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; margin-top: 10px; cursor: pointer; transition: opacity 0.2s; }
+        .btn-login:active { opacity: 0.7; }
 
+        /* HEADER */
+        #app-header { background: white; padding: 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
+        #app-header h1 { margin: 0; font-size: 18px; color: #1c1c1e; }
+        
+        /* MAPA */
+        #map { flex-grow: 1; width: 100%; position: relative; }
+        
+        /* NAV BAR */
+        .nav-bar { background: white; border-top: 1px solid #ddd; display: flex; justify-content: space-around; padding: 10px 0; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+        .nav-item { display: flex; flex-direction: column; align-items: center; color: #8e8e93; text-decoration: none; font-size: 10px; border: none; background: none; cursor: pointer; }
+        .nav-item.active { color: var(--primary); }
+        .nav-item i { font-size: 24px; margin-bottom: 4px; }
+
+        /* BOTON SCAN */
+        .btn-scan { position: absolute; bottom: 20px; right: 20px; background: var(--primary); color: white; width: 60px; height: 60px; border-radius: 30px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 1000; cursor: pointer; border: none; }
+        .btn-scan i { font-size: 30px; }
+
+        /* POPUP ESTILO iOS */
+        .popup-content { min-width: 220px; padding: 5px; }
+        .popup-btns { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+        .btn-action { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; border-radius: 8px; text-decoration: none; color: white; font-weight: 600; font-size: 13px; border: none; }
+        .btn-call { background: var(--success); }
+        .btn-wa { background: #25D366; }
+        .btn-cam { background: var(--warning); }
+        
+        /* NUEVO ESTILO PARA SECCIÓN UNIFICAR */
+        .unir-container { margin-top: 12px; border-top: 1px dashed #ccc; padding-top: 10px; display: flex; gap: 5px; }
+        .input-tel { width: 70%; padding: 8px; border-radius: 8px; border: 1px solid #ccc; font-size: 12px; }
+        .btn-unir { width: 28%; padding: 8px; background: var(--purple); color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen">
+        <div class="login-card">
+            <img src="https://rotulaser.com.mx/wp-content/uploads/2021/04/logo-rotulaser.png" alt="Logo">
+            <h2>Logística Carlos</h2>
+            <p>Ingresa para comenzar</p>
+            <input type="email" id="email" placeholder="Correo electrónico">
+            <input type="password" id="password" placeholder="Contraseña">
+            <button class="btn-login" onclick="login()">Entrar</button>
+        </div>
+    </div>
+
+    <header id="app-header">
+        <h1>Entregas Hoy</h1>
+        <button onclick="logout()" style="border:none; background:none; color:var(--danger); font-weight:600; font-size: 14px;">Salir</button>
+    </header>
+
+    <div id="map">
+        <button class="btn-scan" onclick="escanearEtiqueta()"><i class="material-icons">add_a_photo</i></button>
+    </div>
+
+    <nav class="nav-bar">
+        <button class="nav-item active" onclick="centrarEnMi()"><i class="material-icons">my_location</i><span>Mi Ubicación</span></button>
+        <button class="nav-item" onclick="cargarPuntos()"><i class="material-icons">refresh</i><span>Actualizar</span></button>
+    </nav>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // MANTENEMOS TUS CREDENCIALES ORIGINALES
+        const SUPABASE_URL = "https://tkvsqscvsqvsqvsqvsq.supabase.co"; // Tu URL detectada
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."; // Tu Key detectada
+
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let map, userMarker, currentUid;
+        const markers = L.layerGroup();
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
+            if (data.user) {
+                currentUid = data.user.id;
+                document.getElementById('login-screen').style.display = 'none';
+                initMap();
+            } else { alert("Error: " + error.message); }
+        }
+
+        async function logout() { await _supabase.auth.signOut(); location.reload(); }
+
+        function initMap() {
+            map = L.map('map', { zoomControl: false }).setView([19.4326, -99.1332], 13);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '©OpenStreetMap'
+            }).addTo(map);
+            markers.addTo(map);
+            seguirRepartidor();
+            cargarPuntos();
+        }
+
+        async function cargarPuntos() {
+            markers.clearLayers();
+            const { data, error } = await _supabase.from('entregas').select('*').neq('status', 'entregado');
+            if (data) renderMarkers(data);
+        }
+
+        function renderMarkers(data) {
+            data.forEach(item => {
+                const color = item.source === 'whatsapp' ? '#25D366' : '#AF52DE';
+                const marker = L.circleMarker([item.latitud, item.longitud], {
+                    radius: 10, fillColor: color, color: 'white', weight: 2, fillOpacity: 0.9
+                });
+
+                const popupContent = `
+                    <div class="popup-content">
+                        <strong>${item.direccion_texto || 'S/D'}</strong><br>
+                        <small>Ref: ${item.referencias || 'S/R'}</small><br>
+                        <small>Tel: ${item.telefono_cliente || 'No registrado'}</small>
+                        <div class="popup-btns">
+                            <a href="tel:${item.telefono_cliente}" class="btn-action btn-call"><i class="material-icons">call</i> Llamar</a>
+                            <a href="https://wa.me/52${item.telefono_cliente}" class="btn-action btn-wa"><i class="material-icons">chat</i> WhatsApp</a>
+                            <button onclick="tomarEvidencia(${item.id})" class="btn-action btn-cam"><i class="material-icons">photo_camera</i> Evidencia</button>
+                        </div>
+                        
+                        <div class="unir-container">
+                            <input type="number" id="tel-unificar-${item.id}" class="input-tel" placeholder="10 dígitos">
+                            <button onclick="unificarPorTelefono(${item.id})" class="btn-unir">UNIR</button>
+                        </div>
+                    </div>
+                `;
+                marker.bindPopup(popupContent).addTo(markers);
+            });
+        }
+
+        // FUNCIÓN NUEVA PARA ENVIAR AL NUEVO WEBHOOK
+        async function unificarPorTelefono(idEntrega) {
+            const telInput = document.getElementById(`tel-unificar-${idEntrega}`);
+            const numero = telInput.value;
+
+            if (numero.length !== 10) {
+                return alert("Por favor, ingresa un número de 10 dígitos.");
+            }
+
+            try {
+                // LLAMADA A TU NUEVO WEBHOOK DE MAKE
+                await fetch('https://hook.eu1.make.com/hpoj1fg4vgykw6sdk6vhyix5us4cte7w', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id_entrega: idEntrega,
+                        telefono: numero
+                    })
+                });
+                alert("Datos enviados a Make para unificación.");
+                telInput.value = ""; 
+            } catch (error) {
+                alert("Error al conectar con Make");
+            }
+        }
+
+        function seguirRepartidor() {
+            navigator.geolocation.watchPosition(pos => {
+                const coords = [pos.coords.latitude, pos.coords.longitude];
+                if (!userMarker) userMarker = L.circleMarker(coords, { radius: 10, fillColor: "#007AFF", color: "white", weight: 3, fillOpacity: 1 }).addTo(map);
+                else userMarker.setLatLng(coords);
+            }, null, { enableHighAccuracy: true });
+        }
+
+        function centrarEnMi() { if (userMarker) map.flyTo(userMarker.getLatLng(), 17); }
+
+        async function escanearEtiqueta() {
+            const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment';
+            input.onchange = async (e) => {
+                const file = e.target.files[0]; if (!file) return;
+                const fileName = `scan_${Date.now()}.jpg`;
+                const { data, error } = await _supabase.storage.from('evidencias').upload(fileName, file);
+                if (data) {
+                    const { data: pUrl } = _supabase.storage.from('evidencias').getPublicUrl(fileName);
+                    // URL de tu escenario ORIGINAL (el que ya tenías)
+                    await fetch('https://hook.eu1.make.com/4j6fnhrtd22doelg7nvarndhnh55yp96', { 
+                        method: 'POST', 
+                        headers: {'Content-Type': 'application/json'}, 
+                        body: JSON.stringify({ url_etiqueta: pUrl.publicUrl, repartidor_id: currentUid }) 
+                    });
+                    alert("Escaneo enviado.");
+                }
+            };
+            input.click();
+        }
+
+        async function tomarEvidencia(id) {
+            const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment';
+            input.onchange = async (e) => {
+                const file = e.target.files[0]; if (file) {
+                    const fileName = `evidencia_${id}_${Date.now()}.jpg`;
+                    const { data } = await _supabase.storage.from('evidencias').upload(fileName, file);
+                    if (data) {
+                        const { data: pUrl } = _supabase.storage.from('evidencias').getPublicUrl(fileName);
+                        const { error } = await _supabase.from('entregas').update({ status: 'entregado', foto_evidencia: pUrl.publicUrl }).eq('id', id);
+                        if (!error) { alert("¡Entrega finalizada!"); cargarPuntos(); }
+                    }
+                }
+            };
+            input.click();
+        }
+    </script>
+</body>
+</html>
