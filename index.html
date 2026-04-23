@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Logística Pro v10.5 - Dark Mode</title>
+    <title>Logística Pro v9.7 - GPS & Evidencia</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -11,62 +11,71 @@
     
     <style>
         :root {
-            --primary: #0A84FF;
-            --success: #30D158;
-            --danger: #FF453A;
-            --bg-dark: #121212;
-            --card-dark: #1C1C1E;
+            --primary: #007AFF;
+            --success: #34C759;
+            --warning: #FF9500;
+            --danger: #FF3B30;
+            --dark: #1C1C1E;
+            --gray: #8E8E93;
+            --bg: #F2F2F7;
         }
 
         html, body { 
             margin: 0; padding: 0; height: 100%; width: 100%; 
             font-family: -apple-system, system-ui, sans-serif;
-            background-color: var(--bg-dark); color: white; overflow: hidden;
+            background-color: var(--bg); overflow: hidden;
         }
 
-        /* EL MAPA OSCURO QUE TE GUSTÓ */
+        /* FILTRO MAPA OSCURO - APLICADO SOBRE TU ESTRUCTURA */
         .leaflet-tile-container img { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
 
         #login-screen { 
-            position: fixed; inset: 0; background: var(--bg-dark); z-index: 9999;
-            display: flex; align-items: center; justify-content: center; padding: 20px;
+            max-width: 360px; margin: 20% auto; padding: 20px; background: white; border-radius: 12px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
         }
-        .login-card { background: var(--card-dark); padding: 40px; border-radius: 28px; width: 100%; max-width: 360px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #333; }
-        .login-card input { width: 100%; padding: 16px; margin-bottom: 12px; border-radius: 14px; border: 1px solid #444; background: #2c2c2c; color: white; box-sizing: border-box; font-size: 1rem; }
-
+        
         #app-shell { display: none; height: 100%; flex-direction: column; }
-        #map { flex: 1; width: 100%; background: #121212; }
+        #map { flex: 1; width: 100%; }
 
-        .modal { display: none; position: fixed; z-index: 2000; inset: 0; background: rgba(0,0,0,0.9); }
-        .modal-content { background: var(--card-dark); margin: 10% auto; width: 92%; max-width: 420px; border-radius: 30px; overflow: hidden; border: 1px solid #444; }
+        .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+        .modal-content { background: white; margin: 10% auto; width: 90%; max-width: 400px; border-radius: 12px; overflow: hidden; position: relative; }
         
-        .info-box { background: #2c2c2e; padding: 20px; border-radius: 20px; margin: 15px; border-left: 6px solid var(--primary); }
         /* REFERENCIA EN ROJO Y GRANDE */
-        .ref-texto { color: var(--danger); font-weight: 900; font-size: 1.4rem; display: block; margin-top: 5px; text-transform: uppercase; }
-        
-        .btn-base { width: 100%; padding: 18px; border: none; border-radius: 18px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px; font-size: 1rem; }
-        
-        .floating-btns { position: absolute; bottom: 35px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 15px; }
-        .fab { width: 65px; height: 65px; border-radius: 20px; background: var(--card-dark); color: var(--primary); border: 1px solid #444; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(0,0,0,0.6); }
+        .referencia-alerta { 
+            color: var(--danger); 
+            font-weight: 900; 
+            font-size: 1.3rem; 
+            display: block; 
+            margin-top: 5px;
+        }
+
+        .btn-accion { 
+            width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
 
     <div id="login-screen">
-        <div class="login-card">
-            <h1 style="margin-bottom: 30px;">Logística Carlos</h1>
-            <input type="text" id="user-email" placeholder="Usuario">
-            <input type="password" id="user-pass" placeholder="Contraseña">
-            <button onclick="login()" class="btn-base" style="background: var(--primary); color: white;">INGRESAR</button>
+        <h2 style="margin-top:0">Logística Pro</h2>
+        <div style="margin-bottom: 15px; text-align: left;">
+            <label style="display: block; font-size: 0.8rem; color: var(--gray);">USUARIO</label>
+            <input type="text" id="user-email" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box;">
         </div>
+        <div style="margin-bottom: 15px; text-align: left;">
+            <label style="display: block; font-size: 0.8rem; color: var(--gray);">CONTRASEÑA</label>
+            <input type="password" id="user-pass" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box;">
+        </div>
+        <button onclick="login()" style="width:100%; background: var(--primary); color:white; padding:15px; border:none; border-radius:8px; font-weight:bold;">INGRESAR</button>
     </div>
 
     <div id="app-shell">
         <div id="map"></div>
-        <div class="floating-btns">
-            <button class="fab" onclick="optimizarRuta()"><i class="material-icons" style="font-size: 35px;">directions_run</i></button>
-            <button class="fab" onclick="centrarEnMi()"><i class="material-icons" style="font-size: 35px;">my_location</i></button>
+        
+        <div style="position: absolute; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px;">
+            <button onclick="optimizarRuta()" style="width: 56px; height: 56px; border-radius: 28px; background: white; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); color: var(--primary);"><i class="material-icons">directions_run</i></button>
+            <button onclick="centrarEnMi()" style="width: 56px; height: 56px; border-radius: 28px; background: white; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); color: var(--primary);"><i class="material-icons">my_location</i></button>
         </div>
+
         <div id="modal-detalle" class="modal">
             <div class="modal-content" id="entrega-detalle"></div>
         </div>
@@ -76,9 +85,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <script>
-        // --- COPIANDO TUS KEYS EXACTAS DEL ARCHIVO INDEX(2).HTML ---
+        // --- TUS LIGAS Y KEYS ORIGINALES ---
         const SUPABASE_URL = 'https://ayreitpmsaxpjsclpysg.supabase.co';
-        const SUPABASE_KEY = 'PON_TU_KEY_QUE_ESTABA_EN_EL_INDEX_2_AQUI'; 
+        const SUPABASE_KEY = 'TU_KEY_REAL_AQUI'; // <--- Pon tu key aquí, la que tenías antes
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         const db = new Dexie("LogisticaDB");
@@ -86,22 +95,21 @@
 
         let map, userMarker, listaEntregas = [], fotoBase64 = null;
 
-        function login() {
+        async function login() {
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-shell').style.display = 'flex';
-            setTimeout(initMap, 200);
+            initMap();
         }
 
         function initMap() {
-            if (map) return;
-            map = L.map('map', { zoomControl: false, attributionControl: false }).setView([19.4326, -99.1332], 12);
+            map = L.map('map', { zoomControl: false }).setView([19.4326, -99.1332], 12);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
             seguirRepartidor();
             loadData();
         }
 
         async function loadData() {
-            const { data, error } = await _supabase.from('entregas').select('*');
+            const { data } = await _supabase.from('entregas').select('*');
             if (data) {
                 listaEntregas = data;
                 await db.entregas.bulkPut(data);
@@ -112,12 +120,8 @@
         function renderMarkers() {
             map.eachLayer(l => { if(l instanceof L.CircleMarker && l !== userMarker) map.removeLayer(l); });
             listaEntregas.forEach(e => {
-                const lat = parseFloat(e.latitud);
-                const lon = parseFloat(e.longitud);
-                if (isNaN(lat) || isNaN(lon)) return;
-
-                const color = (e.estado || '').toLowerCase() === 'entregado' ? '#30D158' : '#0A84FF';
-                L.circleMarker([lat, lon], { radius: 12, fillColor: color, color: "white", weight: 2, fillOpacity: 1 })
+                const color = (e.estado || '').toLowerCase() === 'entregado' ? '#34C759' : '#007AFF';
+                L.circleMarker([e.latitud, e.longitud], { radius: 10, fillColor: color, color: "white", weight: 2, fillOpacity: 1 })
                  .addTo(map).on('click', () => renderEntregaDetalle(e));
             });
         }
@@ -126,29 +130,32 @@
             fotoBase64 = null;
             const det = document.getElementById('entrega-detalle');
             det.innerHTML = `
-                <div style="padding: 25px;">
+                <div style="padding: 20px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <h2 style="margin:0;">Guía: ${e.guia}</h2>
-                        <span style="background:${(e.estado || 'pendiente').toLowerCase() === 'entregado' ? '#30D158' : '#0A84FF'}; padding:6px 14px; border-radius:12px; font-size:0.8rem; font-weight:bold; color:white;">${(e.estado || 'PENDIENTE').toUpperCase()}</span>
+                        <h3 style="margin:0;">Guía: ${e.guia}</h3>
+                        <span style="background:${e.estado === 'entregado' ? '#34C759' : '#007AFF'}; color:white; padding:4px 10px; border-radius:10px; font-size:0.8rem; font-weight:bold;">${(e.estado || 'PENDIENTE').toUpperCase()}</span>
                     </div>
-                    <div class="info-box">
-                        <small style="color:#A0A0A0;">📍 DIRECCIÓN</small>
-                        <p style="margin:5px 0 15px 0; font-size:0.95rem;">${e.direccion}</p>
-                        <small style="color:#A0A0A0;">📝 REFERENCIA</small>
-                        <span class="ref-texto">${e.referencia || 'SIN REFERENCIAS'}</span>
+                    
+                    <div style="background:#f2f2f7; padding:15px; border-radius:12px; margin-bottom:15px;">
+                        <small style="color:var(--gray); font-weight:bold;">DIRECCIÓN</small>
+                        <p style="margin:5px 0 10px 0;">${e.direccion}</p>
+                        <small style="color:var(--gray); font-weight:bold;">REFERENCIA</small>
+                        <span class="referencia-alerta">${e.referencia || 'SIN REFERENCIAS'}</span>
                     </div>
-                    <button class="btn-base" style="background:#3a3a3c; color:white;" onclick="document.getElementById('f').click()">
+
+                    <button class="btn-accion" style="background:#e5e5ea; color:var(--dark);" onclick="document.getElementById('f').click()">
                         <i class="material-icons">photo_camera</i> FOTO (OPCIONAL)
                     </button>
                     <input type="file" id="f" accept="image/*" capture="camera" style="display:none" onchange="preview(event)">
-                    <img id="p-img" style="width:100%; border-radius:20px; display:none; margin-bottom:15px;">
+                    <img id="p-img" style="width:100%; border-radius:12px; display:none; margin-bottom:10px;">
                     
-                    <button class="btn-base" style="background:var(--success); color:white;" onclick="confirmar('${e.id}')">
+                    <button class="btn-accion" style="background:var(--success); color:white;" onclick="confirmar('${e.id}')">
                         <i class="material-icons">check_circle</i> CONFIRMAR ENTREGA
                     </button>
+
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                        <button class="btn-base" style="background:var(--primary); color:white;" onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${e.latitud},${e.longitud}')">NAVEGAR</button>
-                        <button class="btn-base" style="background:#3a3a3c; color:white;" onclick="document.getElementById('modal-detalle').style.display='none'">CERRAR</button>
+                        <button class="btn-accion" style="background:var(--primary); color:white;" onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${e.latitud},${e.longitud}')">MAPS</button>
+                        <button class="btn-accion" style="background:var(--gray); color:white;" onclick="document.getElementById('modal-detalle').style.display='none'">CERRAR</button>
                     </div>
                 </div>
             `;
@@ -158,7 +165,7 @@
         function preview(e) {
             const r = new FileReader();
             r.onload = () => { fotoBase64 = r.result; const i = document.getElementById('p-img'); i.src = r.result; i.style.display = 'block'; };
-            if(e.target.files[0]) r.readAsDataURL(e.target.files[0]);
+            r.readAsDataURL(e.target.files[0]);
         }
 
         async function confirmar(id) {
@@ -170,20 +177,19 @@
                     longitud_confirmada: pos.coords.longitude,
                     foto_evidencia: fotoBase64
                 };
-                try {
-                    await db.entregas.update(id, upd);
-                    await _supabase.from('entregas').update(upd).eq('id', id);
-                    alert("✅ Entrega Guardada");
-                    document.getElementById('modal-detalle').style.display = 'none';
-                    loadData();
-                } catch(e) { alert("Guardado localmente"); }
-            }, () => alert("GPS Necesario"), { enableHighAccuracy: true });
+                // Guardamos en Local (Dexie) y en Supabase
+                await db.entregas.update(id, upd);
+                await _supabase.from('entregas').update(upd).eq('id', id);
+                alert("Entrega Guardada");
+                document.getElementById('modal-detalle').style.display = 'none';
+                loadData();
+            }, () => alert("GPS Necesario para confirmar."), { enableHighAccuracy: true });
         }
 
         function seguirRepartidor() {
             navigator.geolocation.watchPosition(p => {
                 const c = [p.coords.latitude, p.coords.longitude];
-                if (!userMarker) userMarker = L.circleMarker(c, { radius: 10, fillColor: "#0A84FF", color: "white", weight: 3, fillOpacity: 1 }).addTo(map);
+                if (!userMarker) userMarker = L.circleMarker(c, { radius: 10, fillColor: "#007AFF", color: "white", weight: 3, fillOpacity: 1 }).addTo(map);
                 else userMarker.setLatLng(c);
             }, null, { enableHighAccuracy: true });
         }
