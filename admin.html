@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
     <style>
         :root {
             --primary: #007AFF; --success: #34C759; --warning: #FF9500; 
@@ -56,17 +58,19 @@
         .kpi-card h3 { margin: 0 0 10px 0; font-size: 12px; color: var(--gray); text-transform: uppercase; letter-spacing: 1px; }
         .kpi-card .number { font-size: 32px; font-weight: 800; color: var(--dark); }
 
-        /* MAPA CORREGIDO */
+        /* MAPA */
         .map-container { background: white; padding: 15px; border-radius: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); min-height: 450px; display: flex; flex-direction: column; }
         #mapAdmin { flex: 1; border-radius: 12px; margin-top: 10px; z-index: 1; min-height: 400px; }
 
+        /* TABLA */
         .table-container { background: white; padding: 20px; border-radius: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; min-width: 600px; }
         th, td { padding: 14px; border-bottom: 1px solid #f2f2f7; text-align: left; }
         th { color: var(--gray); font-size: 11px; text-transform: uppercase; }
         .badge { padding: 6px 12px; border-radius: 20px; font-size: 10px; font-weight: 800; color: white; text-transform: uppercase; }
         
-        .btn-excel { background: var(--success); color: white; border: none; padding: 12px 20px; border-radius: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        .btn-excel { background: var(--success); color: white; border: none; padding: 12px 20px; border-radius: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+        .btn-excel:hover { background: #2ea84e; }
     </style>
 </head>
 <body>
@@ -100,7 +104,6 @@
         <div class="main-content">
             <div class="header">
                 <h1 style="font-size: 24px; font-weight: 800;">Monitoreo Logístico</h1>
-                
                 <div class="filtros-container">
                     <input type="date" id="filtro-fecha" class="date-picker" onchange="fetchData()">
                     <button class="btn-excel" onclick="exportarExcel()"><span class="material-icons">download</span> EXCEL</button>
@@ -159,6 +162,7 @@
         const _supabase = supabase.createClient(URL_PROYECTO, ANON_KEY);
 
         let mapAdmin, markersLayer;
+        let datosActuales = []; // Variable global para guardar los datos y poder exportarlos a Excel
 
         async function loginAdmin() {
             const email = document.getElementById('admin-email').value;
@@ -179,7 +183,6 @@
         }
 
         function initDashboard() {
-            // Establecer fecha de hoy en el input de calendario por defecto
             let hoy = new Date();
             let mes = String(hoy.getMonth() + 1).padStart(2, '0');
             let dia = String(hoy.getDate()).padStart(2, '0');
@@ -190,15 +193,13 @@
             markersLayer = L.layerGroup().addTo(mapAdmin);
 
             fetchData();
-            setInterval(fetchData, 30000); // Refresca en vivo cada 30 segs
+            setInterval(fetchData, 30000); 
         }
 
         async function fetchData() {
-            // 1. LEER LA FECHA DEL CALENDARIO
             let fechaElegida = document.getElementById('filtro-fecha').value;
             if(!fechaElegida) return;
 
-            // Rango de inicio y fin del día elegido
             let inicioDia = new Date(fechaElegida + 'T00:00:00').toISOString();
             let finDia = new Date(fechaElegida + 'T23:59:59').toISOString();
 
@@ -210,7 +211,10 @@
             
             if (error || !data) return;
 
-            // 2. ACTUALIZAR KPIS
+            // Guardar datos en la variable global para el reporte Excel
+            datosActuales = data;
+
+            // ACTUALIZAR KPIS
             const total = data.length;
             const entregados = data.filter(e => (e.estado || '').toLowerCase() === 'entregado').length;
             const pendientes = data.filter(e => (e.estado || 'pendiente').toLowerCase() === 'pendiente').length;
@@ -221,7 +225,7 @@
             document.getElementById('kpi-pendientes').innerText = pendientes;
             document.getElementById('kpi-incidencias').innerText = incidencias;
 
-            // 3. ACTUALIZAR MAPA
+            // ACTUALIZAR MAPA
             markersLayer.clearLayers();
             let puntosValidos = [];
 
@@ -240,12 +244,11 @@
                  .addTo(markersLayer);
             });
 
-            // Centrar mapa inteligentemente si hay puntos
             if(puntosValidos.length > 0) {
                 mapAdmin.fitBounds(puntosValidos, { padding: [50, 50], maxZoom: 15 });
             }
 
-            // 4. ACTUALIZAR TABLA (Top 100 max)
+            // ACTUALIZAR TABLA (Mostrar máximo 100 en la web para no alentar)
             const tbody = document.getElementById('tabla-body');
             tbody.innerHTML = '';
             data.slice(0, 100).forEach(item => {
@@ -267,8 +270,38 @@
             });
         }
 
+        // --- FUNCIÓN MÁGICA PARA GENERAR EL EXCEL ---
         function exportarExcel() {
-            alert("Botón listo para la siguiente fase: ¡Descarga a Excel!");
+            if(datosActuales.length === 0) {
+                alert("No hay datos para exportar en esta fecha.");
+                return;
+            }
+
+            // 1. Limpiar y formatear los datos para el Excel
+            const datosLimpios = datosActuales.map(item => {
+                return {
+                    "Orden de Ruta": item.orden || "Sin orden",
+                    "Estatus Final": (item.estado || "pendiente").toUpperCase(),
+                    "Nombre del Cliente": item.nombre || "Sin Nombre",
+                    "Teléfono": item.telefono || "N/A",
+                    "Dirección de Entrega": item.direccion || "N/A",
+                    "Referencias": item.referencia || item.referencias || "",
+                    "Hora de Confirmación": item.fecha_entrega ? new Date(item.fecha_entrega).toLocaleString() : "Pendiente",
+                    "GPS Confirmado (Lat, Lon)": (item.latitud_confirmada && item.longitud_confirmada) ? `${item.latitud_confirmada}, ${item.longitud_confirmada}` : "Sin datos",
+                    "Link de Evidencia Fotográfica": item.foto_url || "Sin foto"
+                };
+            });
+
+            // 2. Crear la hoja de trabajo
+            const hoja = XLSX.utils.json_to_sheet(datosLimpios);
+
+            // 3. Crear el libro de trabajo y añadir la hoja
+            const libro = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(libro, hoja, "Reporte Logística");
+
+            // 4. Descargar el archivo con la fecha en el nombre
+            let fechaElegida = document.getElementById('filtro-fecha').value;
+            XLSX.writeFile(libro, `Reporte_Logistica_${fechaElegida}.xlsx`);
         }
     </script>
 </body>
