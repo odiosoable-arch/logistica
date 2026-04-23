@@ -1,1 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Logística Carlos v42.0</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <style>
+        :root { --primary: #007AFF; --success: #34C759; --danger: #FF3B30; --gray: #8E8E93; --bg: #F2F2F7; }
+        html, body { margin: 0; padding: 0; height: 100%; width: 100%; font-family: sans-serif; background: var(--bg); overflow: hidden; }
+        #login-screen { position: fixed; inset: 0; background: white; z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        #app-shell { display: none; height: 100%; flex-direction: column; position: relative; }
+        #map { flex: 1; width: 100%; z-index: 1; }
+        .modal { display: none; position: fixed; z-index: 2000; inset: 0; background: rgba(0,0,0,0.5); }
+        .modal-content { background: white; margin: 10% auto; width: 92%; max-width: 450px; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .status-badge { padding: 4px 12px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; color: white; text-transform: uppercase; }
+        .btn-action { width: 100%; padding: 15px; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+        #preview-img { width: 100%; border-radius: 12px; display: none; margin: 10px 0; border: 1px solid #ddd; }
+        .floating-controls { position: absolute; bottom: 30px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 15px; }
+        .fab { width: 60px; height: 60px; border-radius: 30px; background: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: none; color: var(--primary); }
+    </style>
+</head>
+<body>
 
+    <div id="login-screen">
+        <div style="width: 100%; max-width: 350px; text-align: center;">
+            <h2>Logística Carlos</h2>
+            <button onclick="login()" style="width:100%; background: var(--primary); color:white; padding:18px; border:none; border-radius:12px; font-weight:bold; font-size:1.1rem;">ENTRAR AL SISTEMA</button>
+        </div>
+    </div>
+
+    <div id="app-shell">
+        <div id="map"></div>
+        <div class="floating-controls">
+            <button class="fab" onclick="optimizarRuta()"><i class="material-icons" style="font-size:30px;">directions_run</i></button>
+            <button class="fab" onclick="centrarEnMi()"><i class="material-icons" style="font-size:30px;">my_location</i></button>
+        </div>
+        <div id="modal-detalle" class="modal"><div class="modal-content" id="entrega-detalle"></div></div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://ayreitpmsaxpjsclpysg.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbWpqY2dydWFjd2JtYmljYnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDI2NTYsImV4cCI6MjA5MTcxODY1Nn0.wIMdzc8gEycItKvPGvRmSu90kSsOxviTOgnMNIF4dJs'; // <--- COLOCA AQUÍ TU CLAVE REAL
+        
+        let _supabase;
+        try {
+            _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        } catch(e) { console.error("Error inicializando Supabase", e); }
+
+        const db = new Dexie("LogisticaCarlosDB");
+        db.version(1).stores({ entregas: 'id, guia, estado, latitud, longitud' });
+
+        let map, userMarker, listaEntregas = [], fotoBase64 = null;
+
+        function login() {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('app-shell').style.display = 'flex';
+            setTimeout(initMap, 300);
+        }
+
+        function initMap() {
+            if (map) return;
+            map = L.map('map', { zoomControl: false }).setView([19.4326, -99.1332], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            seguirRepartidor();
+            cargarDatos();
+        }
+
+        async function cargarDatos() {
+            console.log("Intentando cargar datos...");
+            try {
+                const { data, error } = await _supabase.from('entregas').select('*');
+                if (error) throw error;
+                
+                if (data && data.length > 0) {
+                    console.log("Datos recibidos:", data.length);
+                    listaEntregas = data;
+                    await db.entregas.bulkPut(data);
+                    renderMarkers();
+                } else {
+                    console.warn("La tabla 'entregas' está vacía.");
+                    alert("No se encontraron entregas en la base de datos.");
+                }
+            } catch (e) {
+                console.error("Error de carga:", e);
+                listaEntregas = await db.entregas.toArray();
+                if(listaEntregas.length > 0) renderMarkers();
+                else alert("Error de conexión y no hay datos locales.");
+            }
+        }
+
+        function renderMarkers() {
+            // Limpiar marcadores viejos (excepto el del usuario)
+            map.eachLayer(l => { if (l instanceof L.CircleMarker && l !== userMarker) map.removeLayer(l); });
+            
+            listaEntregas.forEach(e => {
+                if (!e.latitud || !e.longitud) return;
+                
+                const color = (e.estado || '').toLowerCase() === 'entregado' ? '#34C759' : '#007AFF';
+                const marker = L.circleMarker([parseFloat(e.latitud), parseFloat(e.longitud)], {
+                    radius: 10, fillColor: color, color: "white", weight: 2, fillOpacity: 0.9
+                }).addTo(map);
+                
+                marker.on('click', () => verDetalle(e));
+            });
+            
+            // Ajustar vista si hay puntos
+            if (listaEntregas.length > 0) {
+                const coords = listaEntregas.filter(e => e.latitud).map(e => [e.latitud, e.longitud]);
+                if (coords.length > 0) map.fitBounds(coords, { padding: [50, 50] });
+            }
+        }
+
+        function verDetalle(entrega) {
+            const container = document.getElementById('entrega-detalle');
+            fotoBase64 = null;
+            const colorEstado = { 'pendiente': '#007AFF', 'entregado': '#34C759', 'cancelado': '#FF3B30' };
+
+            container.innerHTML = `
+                <div style="padding: 20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <h3 style="margin:0;">Guía: ${entrega.guia || '---'}</h3>
+                        <span class="status-badge" style="background:${colorEstado[(entrega.estado || 'pendiente').toLowerCase()] || '#8E8E93'}">
+                            ${(entrega.estado || 'PENDIENTE').toUpperCase()}
+                        </span>
+                    </div>
+                    <div style="background:#F2F2F7; padding:15px; border-radius:12px; margin-bottom:20px; border-left: 5px solid var(--primary);">
+                        <p><strong>📍 DIRECCIÓN:</strong><br>${entrega.direccion}</p>
+                        <p><strong>📝 REFERENCIA:</strong><br><span style="color:var(--danger); font-weight:bold;">${entrega.referencia || 'SIN REFERENCIAS'}</span></p>
+                    </div>
+                    <button class="btn-action" style="background:#E5E5EA; color:black; border:2px dashed var(--gray);" onclick="document.getElementById('input-foto').click()">
+                        <i class="material-icons">photo_camera</i> FOTO (OPCIONAL)
+                    </button>
+                    <input type="file" id="input-foto" accept="image/*" capture="camera" style="display:none;" onchange="procesarFoto(event)">
+                    <img id="preview-img">
+                    <button class="btn-action" style="background:var(--success); color:white;" onclick="confirmarEntrega('${entrega.id}')">
+                        <i class="material-icons">check_circle</i> CONFIRMAR ENTREGA
+                    </button>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                        <button class="btn-action" style="background:var(--primary); color:white;" onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${entrega.latitud},${entrega.longitud}')">NAVEGAR</button>
+                        <button class="btn-action" style="background:var(--gray); color:white;" onclick="document.getElementById('modal-detalle').style.display='none'">CERRAR</button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('modal-detalle').style.display = 'block';
+        }
+
+        function procesarFoto(e) {
+            const reader = new FileReader();
+            reader.onload = () => {
+                fotoBase64 = reader.result;
+                const img = document.getElementById('preview-img');
+                img.src = fotoBase64; img.style.display = 'block';
+            };
+            if(e.target.files[0]) reader.readAsDataURL(e.target.files[0]);
+        }
+
+        async function confirmarEntrega(id) {
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const updateData = {
+                    estado: 'entregado',
+                    fecha_entrega: new Date().toISOString(),
+                    latitud_confirmada: pos.coords.latitude,
+                    longitud_confirmada: pos.coords.longitude,
+                    foto_evidencia: fotoBase64
+                };
+                try {
+                    await db.entregas.update(id, updateData);
+                    const { error } = await _supabase.from('entregas').update(updateData).eq('id', id);
+                    if (error) throw error;
+                    alert("✅ Entrega registrada.");
+                    document.getElementById('modal-detalle').style.display = 'none';
+                    cargarDatos();
+                } catch (err) { alert("⚠️ Guardado localmente."); }
+            });
+        }
+
+        function seguirRepartidor() {
+            navigator.geolocation.watchPosition(pos => {
+                const c = [pos.coords.latitude, pos.coords.longitude];
+                if (!userMarker) userMarker = L.circleMarker(c, { radius: 10, fillColor: "#007AFF", color: "white", weight: 3, fillOpacity: 1 }).addTo(map);
+                else userMarker.setLatLng(c);
+            }, null, { enableHighAccuracy: true });
+        }
+
+        function centrarEnMi() { if (userMarker) map.flyTo(userMarker.getLatLng(), 16); }
+
+        function optimizarRuta() {
+            if (!userMarker || listaEntregas.length === 0) return alert("Sin datos de GPS.");
+            const miPos = userMarker.getLatLng();
+            listaEntregas.sort((a, b) => {
+                const dA = Math.sqrt(Math.pow(a.latitud - miPos.lat, 2) + Math.pow(a.longitud - miPos.lng, 2));
+                const dB = Math.sqrt(Math.pow(b.latitud - miPos.lat, 2) + Math.pow(b.longitud - miPos.lng, 2));
+                return dA - dB;
+            });
+            renderMarkers();
+            alert("Ruta ordenada por cercanía.");
+        }
+    </script>
+</body>
+</html>
