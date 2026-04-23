@@ -80,15 +80,22 @@
     <div id="dashboard-container">
         <div class="sidebar">
             <div class="sidebar-header">
+                <span class="material-icons" style="font-size: 40px; color: var(--primary);">admin_panel_settings</span>
+                <br>
                 <b style="font-size: 18px; letter-spacing: 1px;">LOGÍSTICA PRO</b>
             </div>
-            <div class="nav-item active"><span class="material-icons">dashboard</span> Dashboard</div>
-            <div class="nav-item" onclick="location.reload()"><span class="material-icons">logout</span> Salir</div>
+            <div class="nav-item active"><span class="material-icons">dashboard</span> Panel General</div>
+            <div class="nav-item"><span class="material-icons">map</span> Mapa en Vivo</div>
+            <div class="nav-item"><span class="material-icons">receipt_long</span> Auditoría</div>
+            
+            <div class="nav-item" onclick="location.reload()" style="margin-top: auto; border-top: 1px solid #333;">
+                <span class="material-icons">logout</span> Salir
+            </div>
         </div>
 
         <div class="main-content">
             <div class="header">
-                <h1 style="font-size: 24px; font-weight: 800;">Monitoreo en Tiempo Real</h1>
+                <h1 style="font-size: 24px; font-weight: 800;">Monitoreo de Hoy</h1>
                 <button class="btn-excel" onclick="exportarExcel()"><span class="material-icons">download</span> DESCARGAR EXCEL</button>
             </div>
 
@@ -117,7 +124,7 @@
             </div>
 
             <div class="table-container">
-                <h3 style="margin: 0 0 20px 0; font-size: 16px;">Historial de Movimientos</h3>
+                <h3 style="margin: 0 0 20px 0; font-size: 16px;">Últimas Actualizaciones</h3>
                 <table>
                     <thead>
                         <tr>
@@ -125,7 +132,7 @@
                             <th>Cliente</th>
                             <th>Dirección</th>
                             <th>Estado</th>
-                            <th>Hora</th>
+                            <th>Hora Confirmación</th>
                             <th>Evidencia</th>
                         </tr>
                     </thead>
@@ -149,11 +156,15 @@
             const email = document.getElementById('admin-email').value;
             const pass = document.getElementById('admin-pass').value;
             const errorDiv = document.getElementById('login-error');
+            
+            errorDiv.style.display = 'block';
+            errorDiv.style.color = 'var(--primary)';
+            errorDiv.innerText = "Conectando...";
 
             const { data, error } = await _supabase.auth.signInWithPassword({ email, password: pass });
 
             if (error) {
-                errorDiv.style.display = 'block';
+                errorDiv.style.color = 'var(--danger)';
                 errorDiv.innerText = "Acceso denegado: " + error.message;
             } else {
                 document.getElementById('login-admin').style.display = 'none';
@@ -168,13 +179,24 @@
             markersLayer = L.layerGroup().addTo(mapAdmin);
 
             fetchData();
+            // Actualiza los datos cada 30 segundos
             setInterval(fetchData, 30000);
         }
 
         async function fetchData() {
-            let hoy = new Date(); hoy.setHours(0,0,0,0);
-            const { data } = await _supabase.from('entregas').select('*').gte('creado_en', hoy.toISOString()).order('fecha_entrega', { ascending: false, nullsFirst: false });
+            // Ampliamos el filtro a las últimas 48 horas para que salgan las pruebas
+            let fechaLimite = new Date(); 
+            fechaLimite.setHours(fechaLimite.getHours() - 48);
+
+            const { data, error } = await _supabase.from('entregas')
+                .select('*')
+                .gte('creado_en', fechaLimite.toISOString())
+                .order('id', { ascending: false }); // Ordenamos del más reciente al más antiguo
             
+            if (error) {
+                console.error("Error cargando datos:", error);
+                return;
+            }
             if (!data) return;
 
             // KPIs
@@ -203,19 +225,19 @@
                  .addTo(markersLayer);
             });
 
-            // Tabla
+            // Tabla (Muestra los últimos 50 para no alentar la computadora)
             const tbody = document.getElementById('tabla-body');
             tbody.innerHTML = '';
             data.slice(0, 50).forEach(item => {
                 let st = (item.estado || 'pendiente').toLowerCase();
                 let badge = st === 'entregado' ? 'var(--success)' : (st === 'pendiente' ? 'var(--primary)' : 'var(--warning)');
-                let foto = item.foto_url ? `<a href="${item.foto_url}" target="_blank" style="color:var(--primary); font-weight:bold;">FOTO</a>` : '-';
-                let hora = item.fecha_entrega ? new Date(item.fecha_entrega).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--';
+                let foto = item.foto_url ? `<a href="${item.foto_url}" target="_blank" style="color:var(--primary); font-weight:bold;">FOTO</a>` : '<span style="color:#ccc;">-</span>';
+                let hora = item.fecha_entrega ? new Date(item.fecha_entrega).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '<span style="color:#ccc;">Pendiente</span>';
 
                 tbody.innerHTML += `
                     <tr>
                         <td>#${item.orden || '-'}</td>
-                        <td><b>${item.nombre}</b></td>
+                        <td><b>${item.nombre || 'Sin Nombre'}</b></td>
                         <td><small>${item.direccion || 'S/D'}</small></td>
                         <td><span class="badge" style="background:${badge}">${st}</span></td>
                         <td>${hora}</td>
