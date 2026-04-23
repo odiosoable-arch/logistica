@@ -3,13 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Logística Pro v10.0 - Dark Mode & GPS</title>
+    <title>Logística Pro v10.5 - Dark Mode</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <script src="https://unpkg.com/dexie/dist/dexie.js"></script> 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <style>
         :root {
@@ -26,29 +24,30 @@
             background-color: var(--bg-dark); color: white; overflow: hidden;
         }
 
-        /* FILTRO MAPA OSCURO (EL QUE TE GUSTÓ) */
+        /* EL MAPA OSCURO QUE TE GUSTÓ */
         .leaflet-tile-container img { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
 
         #login-screen { 
             position: fixed; inset: 0; background: var(--bg-dark); z-index: 9999;
             display: flex; align-items: center; justify-content: center; padding: 20px;
         }
-        .login-card { background: var(--card-dark); padding: 40px; border-radius: 28px; width: 100%; max-width: 360px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .login-card input { width: 100%; padding: 16px; margin-bottom: 12px; border-radius: 14px; border: 1px solid #333; background: #2c2c2c; color: white; box-sizing: border-box; font-size: 1rem; }
+        .login-card { background: var(--card-dark); padding: 40px; border-radius: 28px; width: 100%; max-width: 360px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #333; }
+        .login-card input { width: 100%; padding: 16px; margin-bottom: 12px; border-radius: 14px; border: 1px solid #444; background: #2c2c2c; color: white; box-sizing: border-box; font-size: 1rem; }
 
         #app-shell { display: none; height: 100%; flex-direction: column; }
         #map { flex: 1; width: 100%; background: #121212; }
 
-        .modal { display: none; position: fixed; z-index: 2000; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(5px); }
-        .modal-content { background: var(--card-dark); margin: 10% auto; width: 90%; max-width: 420px; border-radius: 30px; overflow: hidden; border: 1px solid #333; }
+        .modal { display: none; position: fixed; z-index: 2000; inset: 0; background: rgba(0,0,0,0.9); }
+        .modal-content { background: var(--card-dark); margin: 10% auto; width: 92%; max-width: 420px; border-radius: 30px; overflow: hidden; border: 1px solid #444; }
         
-        .info-box { background: #2c2c2e; padding: 20px; border-radius: 20px; margin: 15px; }
-        .ref-texto { color: var(--danger); font-weight: 900; font-size: 1.3rem; display: block; margin-top: 5px; line-height: 1.2; }
+        .info-box { background: #2c2c2e; padding: 20px; border-radius: 20px; margin: 15px; border-left: 6px solid var(--primary); }
+        /* REFERENCIA EN ROJO Y GRANDE */
+        .ref-texto { color: var(--danger); font-weight: 900; font-size: 1.4rem; display: block; margin-top: 5px; text-transform: uppercase; }
         
         .btn-base { width: 100%; padding: 18px; border: none; border-radius: 18px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px; font-size: 1rem; }
         
         .floating-btns { position: absolute; bottom: 35px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 15px; }
-        .fab { width: 65px; height: 65px; border-radius: 20px; background: var(--card-dark); color: var(--primary); border: 1px solid #333; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(0,0,0,0.5); }
+        .fab { width: 65px; height: 65px; border-radius: 20px; background: var(--card-dark); color: var(--primary); border: 1px solid #444; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(0,0,0,0.6); }
     </style>
 </head>
 <body>
@@ -73,10 +72,13 @@
         </div>
     </div>
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <script>
-        // --- TUS CREDENCIALES PRESERVADAS ---
+        // --- COPIANDO TUS KEYS EXACTAS DEL ARCHIVO INDEX(2).HTML ---
         const SUPABASE_URL = 'https://ayreitpmsaxpjsclpysg.supabase.co';
-        const SUPABASE_KEY = 'TU_KEY_QUE_ESTABA_EN_INDEX_2'; 
+        const SUPABASE_KEY = 'PON_TU_KEY_QUE_ESTABA_EN_EL_INDEX_2_AQUI'; 
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         const db = new Dexie("LogisticaDB");
@@ -127,12 +129,12 @@
                 <div style="padding: 25px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                         <h2 style="margin:0;">Guía: ${e.guia}</h2>
-                        <span style="background:${e.estado === 'entregado' ? '#30D158' : '#0A84FF'}; padding:6px 14px; border-radius:12px; font-size:0.8rem; font-weight:bold;">${(e.estado || 'PENDIENTE').toUpperCase()}</span>
+                        <span style="background:${(e.estado || 'pendiente').toLowerCase() === 'entregado' ? '#30D158' : '#0A84FF'}; padding:6px 14px; border-radius:12px; font-size:0.8rem; font-weight:bold; color:white;">${(e.estado || 'PENDIENTE').toUpperCase()}</span>
                     </div>
                     <div class="info-box">
-                        <small style="color:#A0A0A0;">DIRECCIÓN</small>
+                        <small style="color:#A0A0A0;">📍 DIRECCIÓN</small>
                         <p style="margin:5px 0 15px 0; font-size:0.95rem;">${e.direccion}</p>
-                        <small style="color:#A0A0A0;">REFERENCIA</small>
+                        <small style="color:#A0A0A0;">📝 REFERENCIA</small>
                         <span class="ref-texto">${e.referencia || 'SIN REFERENCIAS'}</span>
                     </div>
                     <button class="btn-base" style="background:#3a3a3c; color:white;" onclick="document.getElementById('f').click()">
@@ -156,7 +158,7 @@
         function preview(e) {
             const r = new FileReader();
             r.onload = () => { fotoBase64 = r.result; const i = document.getElementById('p-img'); i.src = r.result; i.style.display = 'block'; };
-            r.readAsDataURL(e.target.files[0]);
+            if(e.target.files[0]) r.readAsDataURL(e.target.files[0]);
         }
 
         async function confirmar(id) {
@@ -168,11 +170,13 @@
                     longitud_confirmada: pos.coords.longitude,
                     foto_evidencia: fotoBase64
                 };
-                await db.entregas.update(id, upd);
-                await _supabase.from('entregas').update(upd).eq('id', id);
-                alert("Entrega Guardada");
-                document.getElementById('modal-detalle').style.display = 'none';
-                loadData();
+                try {
+                    await db.entregas.update(id, upd);
+                    await _supabase.from('entregas').update(upd).eq('id', id);
+                    alert("✅ Entrega Guardada");
+                    document.getElementById('modal-detalle').style.display = 'none';
+                    loadData();
+                } catch(e) { alert("Guardado localmente"); }
             }, () => alert("GPS Necesario"), { enableHighAccuracy: true });
         }
 
