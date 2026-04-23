@@ -1,1 +1,330 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control - Logística Pro</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
+    <style>
+        :root {
+            --primary: #007AFF; --success: #34C759; --warning: #FF9500; 
+            --danger: #FF3B30; --purple: #AF52DE; --dark: #1C1C1E; --gray: #8E8E93; --bg: #F2F2F7;
+        }
+        * { box-sizing: border-box; font-family: -apple-system, sans-serif; }
+        body { margin: 0; background: var(--bg); display: flex; height: 100vh; overflow: hidden; }
+
+        /* --- LOGIN ADMIN --- */
+        #login-admin {
+            position: fixed; inset: 0; background: var(--bg); z-index: 9999;
+            display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        .login-card {
+            background: white; width: 100%; max-width: 400px; padding: 40px;
+            border-radius: 25px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.1);
+        }
+        .login-card img { width: 150px; margin-bottom: 20px; }
+        .login-card input {
+            width: 100%; padding: 16px; margin: 10px 0;
+            border: 1px solid #ddd; border-radius: 14px; font-size: 16px; outline: none;
+        }
+        .btn-entrar {
+            width: 100%; padding: 16px; background: var(--dark); color: white;
+            border: none; border-radius: 14px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px;
+        }
+
+        /* --- DASHBOARD --- */
+        #dashboard-container { display: none; width: 100%; height: 100%; }
+
+        .sidebar { width: 260px; background: var(--dark); color: white; display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar-header { padding: 30px 20px; text-align: center; border-bottom: 1px solid #333; }
+        .nav-item { padding: 15px 20px; display: flex; align-items: center; gap: 12px; color: #aaa; cursor: pointer; transition: 0.3s; }
+        .nav-item:hover, .nav-item.active { background: #2c2c2e; color: white; }
+        .nav-item.active { border-left: 4px solid var(--primary); }
+
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 25px; gap: 20px; }
+        
+        /* HEADER Y FILTROS */
+        .header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+        .filtros-container { display: flex; gap: 10px; align-items: center; }
+        .date-picker { padding: 12px 15px; border-radius: 12px; border: 1px solid #ccc; font-family: inherit; font-size: 15px; outline: none; font-weight: bold; color: var(--dark); cursor: pointer; }
+        
+        /* 5 KPIs AHORA */
+        .kpi-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; }
+        .kpi-card { background: white; padding: 20px 25px; border-radius: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .kpi-card h3 { margin: 0 0 8px 0; font-size: 11px; color: var(--gray); text-transform: uppercase; letter-spacing: 1px; }
+        .kpi-card .number { font-size: 28px; font-weight: 800; color: var(--dark); }
+
+        /* MAPA */
+        .map-container { background: white; padding: 15px; border-radius: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); min-height: 450px; display: flex; flex-direction: column; }
+        #mapAdmin { flex: 1; border-radius: 12px; margin-top: 10px; z-index: 1; min-height: 400px; }
+
+        /* TABLA */
+        .table-container { background: white; padding: 20px; border-radius: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 700px; }
+        th, td { padding: 14px; border-bottom: 1px solid #f2f2f7; text-align: left; }
+        th { color: var(--gray); font-size: 11px; text-transform: uppercase; }
+        .badge { padding: 6px 12px; border-radius: 20px; font-size: 10px; font-weight: 800; color: white; text-transform: uppercase; }
+        .driver-tag { font-weight: 800; color: var(--primary); background: #E5F1FF; padding: 4px 10px; border-radius: 8px; font-size: 11px;}
+        
+        .btn-excel { background: var(--success); color: white; border: none; padding: 12px 20px; border-radius: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+        .btn-excel:hover { background: #2ea84e; }
+    </style>
+</head>
+<body>
+
+    <div id="login-admin">
+        <div class="login-card">
+            <img src="https://rotulaser.com.mx/wp-content/uploads/2021/04/logo-rotulaser.png" alt="Logo">
+            <h2 style="margin-bottom: 30px;">Panel Administrativo</h2>
+            <input type="email" id="admin-email" placeholder="Usuario administrador">
+            <input type="password" id="admin-pass" placeholder="Contraseña">
+            <button class="btn-entrar" onclick="loginAdmin()">ACCEDER AL MONITOREO</button>
+            <p id="login-error" style="color:var(--danger); font-size:12px; margin-top:15px; display:none;"></p>
+        </div>
+    </div>
+
+    <div id="dashboard-container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <span class="material-icons" style="font-size: 40px; color: var(--primary);">admin_panel_settings</span>
+                <br>
+                <b style="font-size: 18px; letter-spacing: 1px;">LOGÍSTICA PRO</b>
+            </div>
+            <div class="nav-item active"><span class="material-icons">dashboard</span> Panel General</div>
+            <div class="nav-item"><span class="material-icons">map</span> Mapa en Vivo</div>
+            <div class="nav-item"><span class="material-icons">receipt_long</span> Auditoría</div>
+            <div class="nav-item" onclick="location.reload()" style="margin-top: auto; border-top: 1px solid #333;">
+                <span class="material-icons">logout</span> Salir
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="header">
+                <h1 style="font-size: 24px; font-weight: 800;">Monitoreo Logístico</h1>
+                <div class="filtros-container">
+                    <input type="date" id="filtro-fecha" class="date-picker" onchange="fetchData()">
+                    <button class="btn-excel" onclick="exportarExcel()"><span class="material-icons">download</span> EXCEL</button>
+                </div>
+            </div>
+
+            <div class="kpi-container">
+                <div class="kpi-card" style="border-top: 5px solid var(--primary);">
+                    <h3>Total Paquetes</h3>
+                    <div class="number" id="kpi-total">0</div>
+                </div>
+                <div class="kpi-card" style="border-top: 5px solid var(--purple);">
+                    <h3>Rutas Activas</h3>
+                    <div class="number" id="kpi-rutas">0</div>
+                </div>
+                <div class="kpi-card" style="border-top: 5px solid var(--success);">
+                    <h3>Entregados</h3>
+                    <div class="number" id="kpi-entregados">0</div>
+                </div>
+                <div class="kpi-card" style="border-top: 5px solid var(--warning);">
+                    <h3>Pendientes</h3>
+                    <div class="number" id="kpi-pendientes">0</div>
+                </div>
+                <div class="kpi-card" style="border-top: 5px solid var(--danger);">
+                    <h3>Incidencias</h3>
+                    <div class="number" id="kpi-incidencias">0</div>
+                </div>
+            </div>
+
+            <div class="map-container">
+                <h3 style="margin: 0; font-size: 16px;">Ubicación de Paquetes</h3>
+                <div id="mapAdmin"></div>
+            </div>
+
+            <div class="table-container">
+                <h3 style="margin: 0 0 20px 0; font-size: 16px;">Historial del Día</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Orden</th>
+                            <th>Chofer</th>
+                            <th>Cliente</th>
+                            <th>Dirección</th>
+                            <th>Estado</th>
+                            <th>Confirmación</th>
+                            <th>Evidencia</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        const URL_PROYECTO = 'https://dmmjjcgruacwbmbicbyg.supabase.co';
+        const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbWpqY2dydWFjd2JtYmljYnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDI2NTYsImV4cCI6MjA5MTcxODY1Nn0.wIMdzc8gEycItKvPGvRmSu90kSsOxviTOgnMNIF4dJs'; 
+        const _supabase = supabase.createClient(URL_PROYECTO, ANON_KEY);
+
+        let mapAdmin, markersLayer;
+        let datosActuales = []; 
+        let mapaChoferes = {}; // Diccionario para guardar ID_CHOFER -> NOMBRE
+
+        async function loginAdmin() {
+            const email = document.getElementById('admin-email').value;
+            const pass = document.getElementById('admin-pass').value;
+            const errorDiv = document.getElementById('login-error');
+            
+            errorDiv.style.display = 'block'; errorDiv.style.color = 'var(--primary)'; errorDiv.innerText = "Conectando...";
+
+            const { data, error } = await _supabase.auth.signInWithPassword({ email, password: pass });
+
+            if (error) {
+                errorDiv.style.color = 'var(--danger)'; errorDiv.innerText = "Acceso denegado: " + error.message;
+            } else {
+                document.getElementById('login-admin').style.display = 'none';
+                document.getElementById('dashboard-container').style.display = 'flex';
+                initDashboard();
+            }
+        }
+
+        function initDashboard() {
+            let hoy = new Date();
+            let mes = String(hoy.getMonth() + 1).padStart(2, '0');
+            let dia = String(hoy.getDate()).padStart(2, '0');
+            document.getElementById('filtro-fecha').value = `${hoy.getFullYear()}-${mes}-${dia}`;
+
+            mapAdmin = L.map('mapAdmin').setView([19.67, -99.16], 11);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(mapAdmin);
+            markersLayer = L.layerGroup().addTo(mapAdmin);
+
+            fetchData();
+            setInterval(fetchData, 30000); 
+        }
+
+        async function fetchData() {
+            let fechaElegida = document.getElementById('filtro-fecha').value;
+            if(!fechaElegida) return;
+
+            let inicioDia = new Date(fechaElegida + 'T00:00:00').toISOString();
+            let finDia = new Date(fechaElegida + 'T23:59:59').toISOString();
+
+            // 1. OBTENER CORREOS DE LOS CHOFERES
+            const { data: choferesBD } = await _supabase.from('perfiles_repartidores').select('id, email');
+            if (choferesBD) {
+                choferesBD.forEach(ch => {
+                    // Cortamos el correo antes del @ para usarlo como nombre
+                    mapaChoferes[ch.id] = ch.email.split('@')[0].toUpperCase();
+                });
+            }
+
+            // 2. OBTENER PAQUETES
+            const { data, error } = await _supabase.from('entregas')
+                .select('*')
+                .gte('creado_en', inicioDia)
+                .lte('creado_en', finDia)
+                .order('id', { ascending: false }); 
+            
+            if (error || !data) return;
+            datosActuales = data;
+
+            // 3. ACTUALIZAR KPIS
+            const total = data.length;
+            // Contar rutas (choferes) únicos en este día ignorando los que no tengan id
+            const rutasActivas = new Set(data.map(e => e.repartidor_id).filter(id => id)).size; 
+            
+            const entregados = data.filter(e => (e.estado || '').toLowerCase() === 'entregado').length;
+            const pendientes = data.filter(e => (e.estado || 'pendiente').toLowerCase() === 'pendiente').length;
+            const incidencias = total - entregados - pendientes;
+
+            document.getElementById('kpi-total').innerText = total;
+            document.getElementById('kpi-rutas').innerText = rutasActivas; // EL NUEVO KPI
+            document.getElementById('kpi-entregados').innerText = entregados;
+            document.getElementById('kpi-pendientes').innerText = pendientes;
+            document.getElementById('kpi-incidencias').innerText = incidencias;
+
+            // 4. ACTUALIZAR MAPA
+            markersLayer.clearLayers();
+            let puntosValidos = [];
+
+            data.forEach(item => {
+                if (!item.latitud || !item.longitud) return;
+                puntosValidos.push([item.latitud, item.longitud]);
+
+                let color = "#007AFF"; 
+                let st = (item.estado || 'pendiente').toLowerCase();
+                if (st === 'entregado') color = "#34C759";
+                else if (st === 'ausente' || st === 'reintentar') color = "#FF9500";
+                else if (st !== 'pendiente') color = "#FF3B30";
+
+                let nombreChoferMapa = mapaChoferes[item.repartidor_id] || 'Desconocido';
+
+                L.circleMarker([item.latitud, item.longitud], { radius: 7, fillColor: color, color: "white", weight: 2, fillOpacity: 0.9 })
+                 .bindPopup(`<b>${item.nombre}</b><br>🚚 Chofer: ${nombreChoferMapa}<br>Estado: ${st.toUpperCase()}`)
+                 .addTo(markersLayer);
+            });
+
+            if(puntosValidos.length > 0) {
+                mapAdmin.fitBounds(puntosValidos, { padding: [50, 50], maxZoom: 15 });
+            }
+
+            // 5. ACTUALIZAR TABLA (Mostrar máximo 100 en web)
+            const tbody = document.getElementById('tabla-body');
+            tbody.innerHTML = '';
+            data.slice(0, 100).forEach(item => {
+                let st = (item.estado || 'pendiente').toLowerCase();
+                let badge = st === 'entregado' ? 'var(--success)' : (st === 'pendiente' ? 'var(--primary)' : 'var(--warning)');
+                let foto = item.foto_url ? `<a href="${item.foto_url}" target="_blank" style="color:var(--primary); font-weight:bold;">FOTO</a>` : '<span style="color:#ccc;">-</span>';
+                let hora = item.fecha_entrega ? new Date(item.fecha_entrega).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '<span style="color:#ccc;">--:--</span>';
+                let nombreChofer = mapaChoferes[item.repartidor_id] || 'N/A';
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>#${item.orden || '-'}</td>
+                        <td><span class="driver-tag">${nombreChofer}</span></td>
+                        <td><b>${item.nombre || 'Sin Nombre'}</b></td>
+                        <td><small>${item.direccion || 'S/D'}</small></td>
+                        <td><span class="badge" style="background:${badge}">${st}</span></td>
+                        <td>${hora}</td>
+                        <td>${foto}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        // --- EXPORTAR EXCEL ---
+        function exportarExcel() {
+            if(datosActuales.length === 0) {
+                alert("No hay datos para exportar en esta fecha.");
+                return;
+            }
+
+            const datosLimpios = datosActuales.map(item => {
+                let nombreChofer = mapaChoferes[item.repartidor_id] || "Sin asignar";
+
+                return {
+                    "Chofer Asignado": nombreChofer,
+                    "Orden de Ruta": item.orden || "Sin orden",
+                    "Estatus Final": (item.estado || "pendiente").toUpperCase(),
+                    "Nombre del Cliente": item.nombre || "Sin Nombre",
+                    "Teléfono": item.telefono || "N/A",
+                    "Dirección de Entrega": item.direccion || "N/A",
+                    "Referencias": item.referencia || item.referencias || "",
+                    "Hora de Confirmación": item.fecha_entrega ? new Date(item.fecha_entrega).toLocaleString() : "Pendiente",
+                    "GPS Confirmado (Lat, Lon)": (item.latitud_confirmada && item.longitud_confirmada) ? `${item.latitud_confirmada}, ${item.longitud_confirmada}` : "Sin datos",
+                    "Link de Evidencia": item.foto_url || "Sin foto"
+                };
+            });
+
+            const hoja = XLSX.utils.json_to_sheet(datosLimpios);
+            const libro = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(libro, hoja, "Reporte Logística");
+
+            let fechaElegida = document.getElementById('filtro-fecha').value;
+            XLSX.writeFile(libro, `Rutas_Logistica_${fechaElegida}.xlsx`);
+        }
+    </script>
+</body>
+</html>
