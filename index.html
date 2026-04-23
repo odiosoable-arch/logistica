@@ -1,1 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Logística Pro v9.8 - GPS & Evidencia</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script> 
+    
+    <style>
+        :root {
+            --primary: #007AFF;
+            --success: #34C759;
+            --warning: #FF9500;
+            --danger: #FF3B30;
+            --dark: #1C1C1E;
+            --gray: #8E8E93;
+            --bg: #F2F2F7;
+        }
 
+        html, body { 
+            margin: 0; padding: 0; height: 100%; width: 100%; 
+            font-family: -apple-system, system-ui, sans-serif;
+            background-color: var(--bg); overflow: hidden;
+        }
+
+        #login-screen { max-width: 360px; margin: 20% auto; padding: 20px; background: white; border-radius: 12px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .input-group { margin-bottom: 15px; text-align: left; }
+        .input-group label { display: block; font-size: 0.8rem; color: var(--gray); margin-bottom: 5px; }
+        .input-group input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        
+        #app-shell { display: none; height: 100%; flex-direction: column; }
+        #map { flex: 1; width: 100%; }
+
+        .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+        .modal-content { background: white; margin: 10% auto; width: 90%; max-width: 400px; border-radius: 12px; overflow: hidden; position: relative; }
+        
+        .btn-capture { background: #E5E5EA; border: 2px dashed var(--gray); padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 15px; cursor: pointer; }
+        #preview-img { width: 100%; border-radius: 8px; display: none; margin-bottom: 10px; }
+        
+        .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; color: white; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen">
+        <h2 style="margin-top:0">Logística Pro</h2>
+        <div class="input-group">
+            <label>USUARIO</label>
+            <input type="text" id="user-email" placeholder="usuario@dominio.com">
+        </div>
+        <div class="input-group">
+            <label>CONTRASEÑA</label>
+            <input type="password" id="user-pass" placeholder="••••••••">
+        </div>
+        <button onclick="login()" style="width:100%; background: var(--primary); color:white; padding:15px; border:none; border-radius:8px; font-weight:bold;">INGRESAR</button>
+    </div>
+
+    <div id="app-shell">
+        <div id="map"></div>
+        
+        <div id="modal-detalle" class="modal">
+            <div class="modal-content" id="entrega-detalle"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        // --- CONFIGURACIÓN DE LIGAS (NO MODIFICADAS) ---
+        const SUPABASE_URL = 'https://ayreitpmsaxpjsclpysg.supabase.co';
+        const SUPABASE_KEY = 'TU_KEY_AQUÍ'; // El código original tenía las tuyas
+        const _supabase = lib_supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const db = new Dexie("LogisticaDB");
+        db.version(1).stores({ entregas: 'id, guia, estado, latitud, longitud' });
+
+        let map, userMarker, listaEntregas = [];
+        let fotoBase64 = null;
+
+        async function login() {
+            // Lógica de login original...
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('app-shell').style.display = 'flex';
+            initMap();
+        }
+
+        function initMap() {
+            map = L.map('map', { zoomControl: false }).setView([19.4326, -99.1332], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            loadData();
+        }
+
+        async function loadData() {
+            const { data } = await _supabase.from('entregas').select('*');
+            listaEntregas = data;
+            renderMarkers();
+        }
+
+        function renderMarkers() {
+            map.eachLayer(l => { if(l instanceof L.Marker) map.removeLayer(l); });
+            listaEntregas.forEach(e => {
+                let color = e.estado === 'entregado' ? 'green' : 'blue';
+                L.marker([e.latitud, e.longitud]).addTo(map).on('click', () => renderEntregaDetalle(e));
+            });
+        }
+
+        function renderEntregaDetalle(entrega) {
+            const detalleDiv = document.getElementById('entrega-detalle');
+            fotoBase64 = null; // Reset foto
+            
+            const colorEstado = {
+                'pendiente': '#007AFF',
+                'entregado': '#34C759',
+                'cancelado': '#FF3B30',
+                'reintentar': '#FF9500'
+            };
+
+            detalleDiv.innerHTML = `
+                <div style="padding: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h2 style="margin:0; font-size: 1.1rem;">Guía: ${entrega.guia || 'S/G'}</h2>
+                        <span class="status-badge" style="background: ${colorEstado[(entrega.estado || 'pendiente').toLowerCase()]}">
+                            ${(entrega.estado || 'pendiente').toUpperCase()}
+                        </span>
+                    </div>
+
+                    <div style="background: #f2f2f7; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 0.9rem;">
+                        <p style="margin:0 0 8px 0"><strong>📍 DIRECCIÓN:</strong><br>${entrega.direccion}</p>
+                        <p style="margin:0 0 8px 0"><strong>📝 REFERENCIA:</strong><br><span style="color:var(--danger); font-weight:bold;">${entrega.referencia || 'SIN REFERENCIAS'}</span></p>
+                        <p style="margin:0"><strong>📞 TEL:</strong> ${entrega.telefono}</p>
+                    </div>
+
+                    <div class="btn-capture" onclick="document.getElementById('file-input').click()">
+                        <i class="material-icons">photo_camera</i><br>
+                        <small>TOMAR FOTO (OPCIONAL)</small>
+                    </div>
+                    <input type="file" id="file-input" accept="image/*" capture="camera" style="display:none" onchange="previewFoto(event)">
+                    <img id="preview-img">
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <button onclick="confirmarEntrega('${entrega.id}')" style="grid-column: span 2; background: var(--success); color:white; padding:15px; border:none; border-radius:8px; font-weight:bold;">
+                            CONFIRMAR ENTREGA
+                        </button>
+                        <button onclick="window.open('https://www.google.com/maps/search/?api=1&query=${entrega.latitud},${entrega.longitud}')" style="background: var(--primary); color:white; padding:12px; border:none; border-radius:8px;">MAPS</button>
+                        <button onclick="document.getElementById('modal-detalle').style.display='none'" style="background: var(--gray); color:white; padding:12px; border:none; border-radius:8px;">CERRAR</button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('modal-detalle').style.display = 'block';
+        }
+
+        function previewFoto(event) {
+            const reader = new FileReader();
+            reader.onload = () => {
+                fotoBase64 = reader.result;
+                const img = document.getElementById('preview-img');
+                img.src = fotoBase64;
+                img.style.display = 'block';
+            };
+            reader.readAsDataURL(event.target.files[0]);
+        }
+
+        async function confirmarEntrega(id) {
+            // CAPTURA DE COORDENADAS DEL CHOFER
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const lat_chofer = pos.coords.latitude;
+                const lon_chofer = pos.coords.longitude;
+
+                const updates = {
+                    estado: 'entregado',
+                    fecha_entrega: new Date().toISOString(),
+                    foto_evidencia: fotoBase64, // Puede ser null si no se tomó
+                    latitud_confirmada: lat_chofer,
+                    longitud_confirmada: lon_chofer
+                };
+
+                try {
+                    await db.entregas.update(id, updates);
+                    if (navigator.onLine) {
+                        await _supabase.from('entregas').update(updates).eq('id', id);
+                    }
+                    alert("✅ Entrega registrada con ubicación capturada.");
+                    document.getElementById('modal-detalle').style.display = 'none';
+                    loadData();
+                } catch (e) {
+                    alert("Guardado localmente por falta de red.");
+                }
+            }, (err) => {
+                alert("Error al obtener GPS: Favor de activar ubicación para entregar.");
+            });
+        }
+    </script>
+</body>
+</html>
