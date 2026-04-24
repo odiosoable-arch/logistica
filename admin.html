@@ -153,9 +153,13 @@
 
             <div id="view-dashboard" class="view-section active">
                 <div class="kpi-container">
-                    <div class="kpi-card" style="border-top: 5px solid var(--primary);"><h3>Total Hoy</h3><div class="number" id="kpi-total">0</div></div>
+                    <div class="kpi-card" style="border-top: 5px solid var(--primary);"><h3>Total Paquetes</h3><div class="number" id="kpi-total">0</div></div>
+                    <div class="kpi-card" style="border-top: 5px solid var(--purple);"><h3>Rutas Activas</h3><div class="number" id="kpi-rutas">0</div></div>
                     <div class="kpi-card" style="border-top: 5px solid var(--success);"><h3>Entregados</h3><div class="number" id="kpi-entregados">0</div></div>
+                    <div class="kpi-card" style="border-top: 5px solid var(--warning);"><h3>Pendientes</h3><div class="number" id="kpi-pendientes">0</div></div>
+                    <div class="kpi-card" style="border-top: 5px solid var(--danger);"><h3>Incidencias</h3><div class="number" id="kpi-incidencias">0</div></div>
                 </div>
+
                 <div class="map-container">
                     <h3 id="map-title" style="margin: 0;">Ubicación de Paquetes</h3>
                     <div id="mapAdmin"></div>
@@ -261,7 +265,6 @@
             setTimeout(() => { if(mapAdmin) mapAdmin.invalidateSize(); }, 300);
         }
 
-        // --- LA FUNCIÓN NINJA CON RPC ---
         async function ejecutarCreacionChofer() {
             const nombre = document.getElementById('nuevo-nombre').value, email = document.getElementById('nuevo-email').value, pass = document.getElementById('nuevo-pass').value;
             const btn = document.getElementById('btn-crear-chofer'), msg = document.getElementById('msg-chofer');
@@ -269,7 +272,6 @@
             btn.innerText = "PROCESANDO..."; btn.disabled = true;
 
             try {
-                // LLAMAMOS AL SCRIPT SQL QUE CORRISTE
                 const { error } = await _supabase.rpc('crear_chofer', { email_chofer: email, pass_chofer: pass, nombre_chofer: nombre });
                 if (error) throw error;
                 msg.style.color = "green"; msg.innerText = "¡Chofer dado de alta!";
@@ -324,8 +326,14 @@
             if (chs) { datosChoferesCrudos = chs; chs.forEach(c => { mapaChoferes[c.id] = c.nombre || c.email.split('@')[0]; }); if(mostrandoChoferes) dibujarChoferes(); }
             const { data } = await _supabase.from('entregas').select('*').gte('creado_en', inicio).lte('creado_en', fin);
             if (!data) return; datosActuales = data;
+            
+            // CÁLCULO DE LOS 5 KPIs RESTAURADO
             document.getElementById('kpi-total').innerText = data.length;
+            document.getElementById('kpi-rutas').innerText = new Set(data.map(e => e.repartidor_id).filter(id => id)).size;
             document.getElementById('kpi-entregados').innerText = data.filter(e => (e.estado || '').toLowerCase() === 'entregado').length;
+            document.getElementById('kpi-pendientes').innerText = data.filter(e => (e.estado || 'pendiente').toLowerCase() === 'pendiente').length;
+            document.getElementById('kpi-incidencias').innerText = data.length - document.getElementById('kpi-entregados').innerText - document.getElementById('kpi-pendientes').innerText;
+
             markersLayer.clearLayers();
             data.forEach(i => {
                 if (i.latitud && i.longitud) {
@@ -360,7 +368,6 @@
         function dibujarChoferes() {
             driversLayer.clearLayers(); if (!mostrandoChoferes) return;
             datosChoferesCrudos.forEach(ch => {
-                // ESCUDO: Si no hay coordenadas, saltar al siguiente
                 if (!ch.latitud || !ch.longitud) return;
                 let icon = L.divIcon({ className: 'custom', html: `<div class="driver-icon" style="width:36px; height:36px;"><span class="material-icons">local_shipping</span></div>`, iconSize: [36, 36] });
                 L.marker([ch.latitud, ch.longitud], {icon: icon}).bindPopup(`<b>🚚 ${mapaChoferes[ch.id]}</b>`).addTo(driversLayer);
