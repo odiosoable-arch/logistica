@@ -210,29 +210,33 @@
 
     <script>
         const URL_PROYECTO = 'https://dmmjjcgruacwbmbicbyg.supabase.co';
-        const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbWpqY2dydWFjd2JtYmljYnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDI2NTYsImV4cCI6MjA5MTcxODY1Nn0.wIMdzc8gEycItKvPGvRmSu90kSsOxviTOgnMNIF4dJs'; 
+        const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // (tu llave real)
         const _supabase = supabase.createClient(URL_PROYECTO, ANON_KEY);
 
-        let mapAdmin, markersLayer, driversLayer;
-        let datosActuales = [], datosChoferesCrudos = [], mapaChoferes = {}; 
-        let direccionesMaestras = [], mostrandoChoferes = false;
-
-        async function loginAdmin() {
-            const email = document.getElementById('admin-email').value;
-            const pass = document.getElementById('admin-pass').value;
-            const errorEl = document.getElementById('login-error');
-            const { data, error } = await _supabase.auth.signInWithPassword({ email, password: pass });
+        // --- NUEVO: MAGIA DE AUTO-LOGIN ---
+        async function verificarSesionActiva() {
+            const { data: { session } } = await _supabase.auth.getSession();
             
-            if (error) { errorEl.style.display = 'block'; errorEl.innerText = error.message; return; }
-
-            const { data: choferData } = await _supabase.from('perfiles_repartidores').select('id').eq('id', data.user.id).single();
-            if (choferData) { await _supabase.auth.signOut(); errorEl.style.display = 'block'; errorEl.innerText = "Acceso denegado: Eres un chofer."; return; }
-
-            document.getElementById('login-admin').style.display = 'none'; 
-            document.getElementById('dashboard-container').style.display = 'flex'; 
-            initDashboard();
+            if (session) {
+                // Verificamos que el que tiene sesión iniciada NO sea un chofer
+                const { data: choferData } = await _supabase.from('perfiles_repartidores').select('id').eq('id', session.user.id).single();
+                
+                if (choferData) {
+                    // Si es un chofer de metiche, le cerramos la sesión y lo dejamos en la pantalla de login
+                    await _supabase.auth.signOut();
+                    return;
+                }
+                
+                // Si todo está bien (es admin), ocultamos el login y cargamos el panel directo
+                document.getElementById('login-admin').style.display = 'none'; 
+                document.getElementById('dashboard-container').style.display = 'flex'; 
+                initDashboard();
+            }
         }
 
+        // Le decimos al navegador que corra esta validación en cuanto abra la página
+        document.addEventListener('DOMContentLoaded', verificarSesionActiva);
+        // -----------------------------------
         function changeView(view) {
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
