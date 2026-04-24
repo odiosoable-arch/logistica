@@ -1,1 +1,381 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control - Logística Pro</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
+    <style>
+        :root {
+            --primary: #007AFF; --success: #34C759; --warning: #FF9500; 
+            --danger: #FF3B30; --purple: #AF52DE; --dark: #1C1C1E; --gray: #8E8E93; --bg: #F2F2F7;
+        }
+        * { box-sizing: border-box; font-family: -apple-system, sans-serif; }
+        body { margin: 0; background: var(--bg); display: flex; height: 100vh; overflow: hidden; }
+
+        /* --- LOGIN --- */
+        #login-admin { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .login-card { background: white; width: 100%; max-width: 400px; padding: 40px; border-radius: 25px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; }
+        .login-card input { width: 100%; padding: 16px; margin: 10px 0; border: 1px solid #ddd; border-radius: 14px; font-size: 16px; }
+        .btn-entrar { width: 100%; padding: 16px; background: var(--dark); color: white; border: none; border-radius: 14px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+
+        /* --- DASHBOARD ESTRUCTURA --- */
+        #dashboard-container { display: none; width: 100%; height: 100%; flex-direction: row; }
+        .sidebar { width: 260px; background: var(--dark); color: white; display: flex; flex-direction: column; flex-shrink: 0; transition: 0.3s; }
+        .sidebar-header { padding: 30px 20px; text-align: center; border-bottom: 1px solid #333; }
+        .nav-item { padding: 15px 20px; display: flex; align-items: center; gap: 12px; color: #aaa; cursor: pointer; transition: 0.3s; border-left: 4px solid transparent; }
+        .nav-item:hover { background: #2c2c2e; color: white; }
+        .nav-item.active { background: #2c2c2e; color: white; border-left: 4px solid var(--primary); }
+
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 25px; gap: 20px; transition: 0.3s; }
+        .header { display: flex; justify-content: space-between; align-items: center; gap: 15px; }
+        .filtros-container { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .date-picker { padding: 12px 15px; border-radius: 12px; border: 1px solid #ccc; font-weight: bold; cursor: pointer; }
+
+        /* MODO MAPA EN VIVO (FULL SCREEN) */
+        body.live-map-mode .kpi-container, 
+        body.live-map-mode .table-container,
+        body.live-map-mode .header h1 { display: none; }
+        body.live-map-mode .map-container { flex: 1; min-height: 80vh; }
+
+        /* DISEÑO DE ELEMENTOS */
+        .kpi-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; }
+        .kpi-card { background: white; padding: 20px 25px; border-radius: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .kpi-card h3 { margin: 0 0 8px 0; font-size: 11px; color: var(--gray); text-transform: uppercase; }
+        .kpi-card .number { font-size: 28px; font-weight: 800; color: var(--dark); }
+
+        .map-container { background: white; padding: 15px; border-radius: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); min-height: 450px; display: flex; flex-direction: column; position: relative; }
+        #mapAdmin { flex: 1; border-radius: 12px; margin-top: 10px; z-index: 1; }
+
+        .table-container { background: white; padding: 20px; border-radius: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 700px; }
+        th, td { padding: 14px; border-bottom: 1px solid #f2f2f7; text-align: left; }
+        .badge { padding: 6px 12px; border-radius: 20px; font-size: 10px; font-weight: 800; color: white; text-transform: uppercase; }
+        .driver-tag { font-weight: 800; color: var(--primary); background: #E5F1FF; padding: 4px 10px; border-radius: 8px; font-size: 11px; }
+        .btn-excel { background: var(--success); color: white; border: none; padding: 12px 20px; border-radius: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        .btn-choferes { background: var(--dark); color: white; border: none; padding: 12px 20px; border-radius: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        .btn-choferes.activo { background: var(--purple); }
+        .driver-icon { background: var(--purple); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+
+        /* =========================================
+           ADAPTACIÓN PARA CELULARES (RESPONSIVE)
+           ========================================= */
+        @media (max-width: 768px) {
+            #dashboard-container { flex-direction: column; }
+            
+            .sidebar { width: 100%; flex-direction: row; justify-content: space-around; padding: 5px 0; order: 2; border-top: 1px solid #333; z-index: 10; position: fixed; bottom: 0; left: 0; }
+            .sidebar-header { display: none; }
+            
+            .nav-item { padding: 10px; flex: 1; justify-content: center; font-size: 11px; border-left: none; border-bottom: 3px solid transparent; flex-direction: column; gap: 4px; text-align: center; }
+            .nav-item.active { border-left: none; border-bottom: 3px solid var(--primary); background: transparent; }
+            .nav-item .material-icons { font-size: 20px; }
+            
+            .main-content { order: 1; padding: 15px; gap: 15px; padding-bottom: 80px; overflow-y: auto; height: calc(100vh - 60px); }
+            .header { flex-direction: column; align-items: flex-start; gap: 10px; }
+            #main-title { font-size: 18px; margin: 0; }
+            
+            .filtros-container { width: 100%; justify-content: space-between; gap: 5px; }
+            .btn-choferes, .btn-excel, .date-picker { flex: 1; text-align: center; justify-content: center; font-size: 10px; padding: 10px 5px; }
+            
+            .kpi-container { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+            .kpi-card { padding: 12px; }
+            .kpi-card h3 { font-size: 9px; }
+            .kpi-card .number { font-size: 20px; }
+            
+            .map-container { min-height: 300px; padding: 10px; }
+            #mapAdmin { margin-top: 5px; }
+            body.live-map-mode .map-container { min-height: 70vh; }
+            
+            .login-card { padding: 30px 20px; border-radius: 20px; }
+            .login-card h2 { font-size: 18px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="login-admin">
+        <div class="login-card">
+            <img src="https://rotulaser.com.mx/wp-content/uploads/2021/04/logo-rotulaser.png" 
+                 id="logo-img" 
+                 alt="Logo" 
+                 style="width:150px; height:auto; margin-bottom:20px;"
+                 onerror="showFallbackAdminIcon()">
+            
+            <span class="material-icons" 
+                  id="logo-fallback" 
+                  style="font-size: 80px; color: var(--dark); margin-bottom: 20px; display: none;">
+                account_circle
+            </span>
+
+            <h2>Panel Administrativo</h2>
+            <input type="email" id="admin-email" placeholder="Usuario">
+            <input type="password" id="admin-pass" placeholder="Contraseña">
+            <button class="btn-entrar" onclick="loginAdmin()">ACCEDER</button>
+            <p id="login-error" style="color:var(--danger); font-size:12px; margin-top:15px; display:none;"></p>
+        </div>
+    </div>
+
+    <div id="dashboard-container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <span class="material-icons" style="font-size: 40px; color: var(--primary);">admin_panel_settings</span><br>
+                <b style="font-size: 18px;">LOGÍSTICA PRO</b>
+            </div>
+            <div class="nav-item active" id="nav-dashboard" onclick="changeView('dashboard')">
+                <span class="material-icons">dashboard</span> <span class="nav-text">Panel</span>
+            </div>
+            <div class="nav-item" id="nav-live" onclick="changeView('live')">
+                <span class="material-icons">map</span> <span class="nav-text">En Vivo</span>
+            </div>
+            
+            <div class="nav-item" id="nav-direcciones" onclick="changeView('direcciones')">
+                <span class="material-icons">list_alt</span> <span class="nav-text">Direcciones</span>
+            </div>
+            <div class="nav-item" id="nav-choferes" onclick="changeView('choferes')">
+                <span class="material-icons">badge</span> <span class="nav-text">Alta Choferes</span>
+            </div>
+            
+            <div class="nav-item" onclick="location.reload()">
+                <span class="material-icons">logout</span> <span class="nav-text">Salir</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="header">
+                <h1 id="main-title">Monitoreo Logístico</h1>
+                <div class="filtros-container">
+                    <button id="btn-toggle-choferes" class="btn-choferes" onclick="toggleChoferes()">
+                        <span class="material-icons">local_shipping</span> CHOFERES
+                    </button>
+                    <input type="date" id="filtro-fecha" class="date-picker" onchange="fetchData()">
+                    <button class="btn-excel" onclick="exportarExcel()"><span class="material-icons">download</span> EXCEL</button>
+                </div>
+            </div>
+
+            <div class="kpi-container">
+                <div class="kpi-card" style="border-top: 5px solid var(--primary);"><h3>Total Paquetes</h3><div class="number" id="kpi-total">0</div></div>
+                <div class="kpi-card" style="border-top: 5px solid var(--purple);"><h3>Rutas Activas</h3><div class="number" id="kpi-rutas">0</div></div>
+                <div class="kpi-card" style="border-top: 5px solid var(--success);"><h3>Entregados</h3><div class="number" id="kpi-entregados">0</div></div>
+                <div class="kpi-card" style="border-top: 5px solid var(--warning);"><h3>Pendientes</h3><div class="number" id="kpi-pendientes">0</div></div>
+                <div class="kpi-card" style="border-top: 5px solid var(--danger);"><h3>Incidencias</h3><div class="number" id="kpi-incidencias">0</div></div>
+            </div>
+
+            <div class="map-container">
+                <h3 id="map-title" style="margin: 0; font-size: 16px;">Ubicación de Paquetes</h3>
+                <div id="mapAdmin"></div>
+            </div>
+
+            <div class="table-container">
+                <h3 style="margin: 0 0 20px 0; font-size: 16px;">Historial del Día</h3>
+                <table>
+                    <thead><tr><th>Orden</th><th>Chofer</th><th>Cliente</th><th>Dirección</th><th>Estado</th><th>Confirmación</th><th>Evidencia</th></tr></thead>
+                    <tbody id="tabla-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        const URL_PROYECTO = 'https://dmmjjcgruacwbmbicbyg.supabase.co';
+        const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbWpqY2dydWFjd2JtYmljYnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDI2NTYsImV4cCI6MjA5MTcxODY1Nn0.wIMdzc8gEycItKvPGvRmSu90kSsOxviTOgnMNIF4dJs'; 
+        const _supabase = supabase.createClient(URL_PROYECTO, ANON_KEY);
+
+        let mapAdmin, markersLayer, driversLayer;
+        let datosActuales = [], datosChoferesCrudos = [], mapaChoferes = {}; 
+        let mostrandoChoferes = false;
+
+        // Funcion para mostrar el icono de respaldo si falla la imagen
+        function showFallbackAdminIcon() {
+            document.getElementById('logo-img').style.display = 'none';
+            document.getElementById('logo-fallback').style.display = 'inline-block';
+        }
+
+        // --- 1. NUEVO ESCUDO DE SEGURIDAD PARA EL LOGIN ---
+        async function loginAdmin() {
+            const email = document.getElementById('admin-email').value;
+            const pass = document.getElementById('admin-pass').value;
+            const errorEl = document.getElementById('login-error');
+            errorEl.style.display = 'none'; 
+
+            // Intento de Login
+            const { data, error } = await _supabase.auth.signInWithPassword({ email, password: pass });
+            
+            if (error) { 
+                errorEl.style.display = 'block'; 
+                errorEl.innerText = error.message; 
+                return; 
+            }
+
+            // VERIFICACIÓN: ¿Es un chofer intentando colarse?
+            const userId = data.user.id;
+            const { data: choferData } = await _supabase
+                .from('perfiles_repartidores')
+                .select('id')
+                .eq('id', userId)
+                .single();
+
+            // Si encuentra su ID en la tabla de choferes, ¡Lo echamos!
+            if (choferData) {
+                await _supabase.auth.signOut(); 
+                errorEl.style.display = 'block'; 
+                errorEl.innerText = "Acceso Denegado: Cuenta de Repartidor.";
+                return;
+            }
+
+            // Si es Admin real, mostramos el panel
+            document.getElementById('login-admin').style.display = 'none'; 
+            document.getElementById('dashboard-container').style.display = 'flex'; 
+            initDashboard();
+        }
+
+        // --- 2. FUNCIÓN NINJA PARA CREAR CHOFERES SIN SALIR DEL ADMIN ---
+        async function crearNuevoChofer(emailChofer, passChofer, nombreChofer) {
+            try {
+                // Guardar tu sesión actual de Administrador
+                const adminSession = await _supabase.auth.getSession();
+                
+                // Crear la cuenta del chofer en Auth
+                const { data: nuevoUser, error: errorAuth } = await _supabase.auth.signUp({
+                    email: emailChofer,
+                    password: passChofer
+                });
+
+                if (errorAuth) throw errorAuth;
+
+                // Registrar sus datos en la tabla de tu base de datos
+                const { error: errorDB } = await _supabase.from('perfiles_repartidores').insert([{
+                    id: nuevoUser.user.id,
+                    email: emailChofer,
+                    nombre: nombreChofer
+                }]);
+
+                if (errorDB) throw errorDB;
+
+                // Cerrar la sesión del chofer
+                await _supabase.auth.signOut();
+
+                // ¡Restaurar tu sesión de Administrador!
+                if (adminSession.data.session) {
+                    await _supabase.auth.setSession({
+                        access_token: adminSession.data.session.access_token,
+                        refresh_token: adminSession.data.session.refresh_token
+                    });
+                }
+
+                alert("¡Chofer registrado con éxito en la flotilla!");
+                
+            } catch (error) {
+                alert("Error al registrar chofer: " + error.message);
+            }
+        }
+
+        function changeView(view) {
+            // Limpiamos la clase 'active' de todos los botones para que el diseño no se rompa
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            
+            // Tratamiento especial para el mapa en vivo
+            if (view === 'live') {
+                document.body.classList.add('live-map-mode');
+                document.getElementById('nav-live').classList.add('active');
+                document.getElementById('map-title').innerText = "ESTACIÓN DE RASTREO EN VIVO";
+            } else {
+                document.body.classList.remove('live-map-mode');
+                document.getElementById('map-title').innerText = "Ubicación de Paquetes";
+            }
+
+            // Marcar activo el botón que se presionó (preparando terreno para la Fase 2)
+            if (view === 'dashboard') document.getElementById('nav-dashboard').classList.add('active');
+            if (view === 'direcciones') document.getElementById('nav-direcciones').classList.add('active');
+            if (view === 'choferes') document.getElementById('nav-choferes').classList.add('active');
+            
+            setTimeout(() => { if(mapAdmin) mapAdmin.invalidateSize(); }, 300); 
+        }
+
+        function initDashboard() {
+            let hoy = new Date();
+            document.getElementById('filtro-fecha').value = hoy.toISOString().split('T')[0];
+            mapAdmin = L.map('mapAdmin', { zoomControl: false }).setView([19.67, -99.16], 11);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(mapAdmin);
+            L.control.zoom({ position: 'topright' }).addTo(mapAdmin);
+            markersLayer = L.layerGroup().addTo(mapAdmin);
+            driversLayer = L.layerGroup().addTo(mapAdmin);
+            fetchData();
+            setInterval(fetchData, 30000); 
+        }
+
+        async function fetchData() {
+            let fecha = document.getElementById('filtro-fecha').value;
+            let inicio = new Date(fecha + 'T00:00:00').toISOString();
+            let fin = new Date(fecha + 'T23:59:59').toISOString();
+
+            const { data: chs } = await _supabase.from('perfiles_repartidores').select('*');
+            if (chs) {
+                datosChoferesCrudos = chs;
+                chs.forEach(c => { mapaChoferes[c.id] = c.email.split('@')[0].toUpperCase(); });
+                if(mostrandoChoferes) dibujarChoferes();
+            }
+
+            const { data, error } = await _supabase.from('entregas').select('*').gte('creado_en', inicio).lte('creado_en', fin).order('id', { ascending: false }); 
+            if (error || !data) return;
+            datosActuales = data;
+
+            document.getElementById('kpi-total').innerText = data.length;
+            document.getElementById('kpi-rutas').innerText = new Set(data.map(e => e.repartidor_id).filter(id => id)).size;
+            document.getElementById('kpi-entregados').innerText = data.filter(e => (e.estado || '').toLowerCase() === 'entregado').length;
+            document.getElementById('kpi-pendientes').innerText = data.filter(e => (e.estado || 'pendiente').toLowerCase() === 'pendiente').length;
+            document.getElementById('kpi-incidencias').innerText = data.length - document.getElementById('kpi-entregados').innerText - document.getElementById('kpi-pendientes').innerText;
+
+            markersLayer.clearLayers();
+            let pts = [];
+            data.forEach(item => {
+                if (!item.latitud || !item.longitud) return;
+                pts.push([item.latitud, item.longitud]);
+                let st = (item.estado || 'pendiente').toLowerCase();
+                let color = st === 'entregado' ? "#34C759" : (st === 'pendiente' ? "#007AFF" : "#FF9500");
+                L.circleMarker([item.latitud, item.longitud], { radius: 7, fillColor: color, color: "white", weight: 2, fillOpacity: 0.9 })
+                 .bindPopup(`<b>${item.nombre}</b><br>🚚: ${mapaChoferes[item.repartidor_id] || 'N/A'}`).addTo(markersLayer);
+            });
+            if(pts.length > 0 && !mostrandoChoferes) mapAdmin.fitBounds(pts, { padding: [50, 50] });
+
+            const tbody = document.getElementById('tabla-body');
+            tbody.innerHTML = '';
+            data.slice(0, 100).forEach(item => {
+                let st = (item.estado || 'pendiente').toLowerCase();
+                let badge = st === 'entregado' ? 'var(--success)' : (st === 'pendiente' ? 'var(--primary)' : 'var(--warning)');
+                tbody.innerHTML += `<tr><td>#${item.orden || '-'}</td><td><span class="driver-tag">${mapaChoferes[item.repartidor_id] || 'N/A'}</span></td><td><b>${item.nombre}</b></td><td><small>${item.direccion}</small></td><td><span class="badge" style="background:${badge}">${st}</span></td><td>${item.fecha_entrega ? new Date(item.fecha_entrega).toLocaleTimeString() : '--:--'}</td><td>${item.foto_url ? `<a href="${item.foto_url}" target="_blank">FOTO</a>` : '-'}</td></tr>`;
+            });
+        }
+
+        function toggleChoferes() {
+            mostrandoChoferes = !mostrandoChoferes;
+            document.getElementById('btn-toggle-choferes').classList.toggle('activo', mostrandoChoferes);
+            if (mostrandoChoferes) dibujarChoferes(); else driversLayer.clearLayers();
+        }
+
+        function dibujarChoferes() {
+            driversLayer.clearLayers();
+            if (!mostrandoChoferes) return;
+            datosChoferesCrudos.forEach(ch => {
+                let diff = Math.floor((new Date() - new Date(ch.ultima_conexion)) / 60000);
+                let icon = L.divIcon({ className: 'custom', html: `<div class="driver-icon" style="width:36px; height:36px;"><span class="material-icons">local_shipping</span></div>`, iconSize: [36, 36] });
+                L.marker([ch.latitud, ch.longitud], {icon: icon}).bindPopup(`<b>🚚 ${mapaChoferes[ch.id]}</b><br>${diff < 5 ? '🟢 Activo' : '🔴 Desconectado'}`).addTo(driversLayer);
+            });
+        }
+
+        function exportarExcel() {
+            const clean = datosActuales.map(i => ({"Chofer": mapaChoferes[i.repartidor_id] || "N/A", "Orden": i.orden, "Cliente": i.nombre, "Estatus": i.estado, "Hora": i.fecha_entrega ? new Date(i.fecha_entrega).toLocaleString() : "Pendiente", "Foto": i.foto_url}));
+            const ws = XLSX.utils.json_to_sheet(clean);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Reporte");
+            XLSX.writeFile(wb, `Reporte_${document.getElementById('filtro-fecha').value}.xlsx`);
+        }
+    </script>
+</body>
+</html>
