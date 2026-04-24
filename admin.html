@@ -265,6 +265,7 @@
             setTimeout(() => { if(mapAdmin) mapAdmin.invalidateSize(); }, 300);
         }
 
+        // --- MÉTODO HÍBRIDO DE CREACIÓN ---
         async function ejecutarCreacionChofer() {
             const nombre = document.getElementById('nuevo-nombre').value, email = document.getElementById('nuevo-email').value, pass = document.getElementById('nuevo-pass').value;
             const btn = document.getElementById('btn-crear-chofer'), msg = document.getElementById('msg-chofer');
@@ -272,13 +273,33 @@
             btn.innerText = "PROCESANDO..."; btn.disabled = true;
 
             try {
-                const { error } = await _supabase.rpc('crear_chofer', { email_chofer: email, pass_chofer: pass, nombre_chofer: nombre });
-                if (error) throw error;
-                msg.style.color = "green"; msg.innerText = "¡Chofer dado de alta!";
+                const adminSession = await _supabase.auth.getSession(); // Guardar sesión admin
+
+                // 1. Crear con la herramienta OFICIAL (esto evita todos los errores de login)
+                const { data: nuevoUser, error: errorAuth } = await _supabase.auth.signUp({ email: email, password: pass });
+                if (errorAuth) throw errorAuth;
+
+                // 2. Hack para auto-confirmar el correo inmediatamente vía SQL
+                const { error: errorConfirm } = await _supabase.rpc('confirmar_chofer', { email_chofer: email });
+                if (errorConfirm) throw errorConfirm;
+
+                // 3. Guardarlo en tu flotilla
+                await _supabase.from('perfiles_repartidores').insert([{ id: nuevoUser.user.id, email: email, nombre: nombre }]);
+                
+                // 4. Limpiar sesión y restaurar al Admin
+                await _supabase.auth.signOut();
+                if (adminSession.data.session) {
+                    await _supabase.auth.setSession({ access_token: adminSession.data.session.access_token, refresh_token: adminSession.data.session.refresh_token });
+                }
+
+                msg.style.color = "green"; msg.innerText = "¡Chofer registrado y verificado con éxito!";
                 document.getElementById('nuevo-nombre').value = ''; document.getElementById('nuevo-email').value = ''; document.getElementById('nuevo-pass').value = '';
                 fetchData(); 
-            } catch (e) { msg.style.color = "red"; msg.innerText = e.message; }
-            finally { btn.innerText = "REGISTRAR CHOFER"; btn.disabled = false; }
+            } catch (e) { 
+                msg.style.color = "red"; msg.innerText = "Error: " + e.message; 
+            } finally { 
+                btn.innerText = "REGISTRAR CHOFER"; btn.disabled = false; 
+            }
         }
 
         async function fetchDireccionesMaestras() {
@@ -327,7 +348,6 @@
             const { data } = await _supabase.from('entregas').select('*').gte('creado_en', inicio).lte('creado_en', fin);
             if (!data) return; datosActuales = data;
             
-            // CÁLCULO DE LOS 5 KPIs RESTAURADO
             document.getElementById('kpi-total').innerText = data.length;
             document.getElementById('kpi-rutas').innerText = new Set(data.map(e => e.repartidor_id).filter(id => id)).size;
             document.getElementById('kpi-entregados').innerText = data.filter(e => (e.estado || '').toLowerCase() === 'entregado').length;
